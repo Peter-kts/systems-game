@@ -14,7 +14,7 @@ const REDUCED = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduce
 
 function Visual({ type }: { type: ComponentType }) {
   return (
-    <div className="rounded-xl bg-bg p-2">
+    <div className="rounded-xl border border-line bg-bg p-2">
       <svg
         viewBox="0 0 260 120"
         role="img"
@@ -56,7 +56,7 @@ function LearnCard({ type }: { type: ComponentType }) {
 
 function Stepper({ value, min, max, onChange, label }: { value: number; min: number; max: number; onChange: (v: number) => void; label: string }) {
   return (
-    <span className="inline-flex items-center overflow-hidden rounded-lg border border-line2 bg-panel">
+    <span className="inline-flex items-center overflow-hidden rounded-lg border border-line2 bg-bg2">
       <Button variant="ghost" size="icon" aria-label={`Fewer ${label}`} disabled={value <= min} onClick={() => onChange(value - 1)}>
         <Minus />
       </Button>
@@ -73,7 +73,7 @@ function LiveStats({ id }: { id: string }) {
   const t0 = useSim((st) => st.simTime)
   if (!s || t0 === 0) return null
   const tile = (l: string, v: string) => (
-    <div key={l} className="rounded-xl border border-line bg-panel px-2.5 py-1.5">
+    <div key={l} className="rounded-xl border border-line bg-glass px-2.5 py-1.5">
       <span className="block text-[10.5px] text-muted">{l}</span>
       <strong className="font-mono text-[15px] font-medium tabular-nums">{v}</strong>
     </div>
@@ -119,7 +119,7 @@ function Inspector({ node }: { node: DesignNode }) {
                       role="radio"
                       aria-checked={node.cfg[f.key] === o}
                       onClick={() => setConfig(node.id, f.key, o)}
-                      className={cn('cursor-pointer px-2 py-1 font-mono text-xs [&+&]:border-l [&+&]:border-line2', node.cfg[f.key] === o ? 'bg-ink text-bg' : 'text-muted')}
+                      className={cn('cursor-pointer px-2 py-1 font-mono text-xs [&+&]:border-l [&+&]:border-line2', node.cfg[f.key] === o ? 'bg-accent/15 text-accent [text-shadow:0_0_8px_var(--accent)]' : 'text-muted')}
                     >
                       {o} {f.unit}
                     </button>
@@ -174,13 +174,13 @@ function Guide() {
         <li>Run evaluation for the graded 60-second test: normal day, viral spike, a database failure, a cache failure.</li>
       </ol>
       <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Component guide</h3>
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {(['client', ...PALETTE] as ComponentType[]).map((t) => (
-          <button key={t} onClick={() => setOpen(t)} className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-node px-2.5 py-2 text-left hover:border-accent">
+          <button key={t} onClick={() => setOpen(t)} className="flex cursor-pointer items-start gap-2 rounded-xl border border-line bg-node px-2.5 py-2 text-left text-[13px] transition-colors hover:border-accent">
             <ComponentIcon type={t} />
             <span className="grid leading-snug">
               <b className="font-semibold">{CATALOG[t].name}</b>
-              <small className="text-muted">{CATALOG[t].tag}</small>
+              <small className="text-[11px] text-muted">{CATALOG[t].tag}</small>
             </span>
           </button>
         ))}

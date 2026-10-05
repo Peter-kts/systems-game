@@ -17,7 +17,7 @@ export function ScopeStep() {
         title={LEVEL.prompt}
         lead="Interviews start vague on purpose. Spend the first five minutes deciding what's in scope. Sort each statement, then check your answers."
       />
-      <div className="rounded-2xl border border-line bg-panel px-4.5 py-4">
+      <div className="rounded-2xl border border-line bg-glass px-4.5 py-4">
         <p className="m-0 max-w-[65ch]">
           <b>The interviewer says:</b> {LEVEL.brief}
         </p>
@@ -30,7 +30,7 @@ export function ScopeStep() {
             const ok = v && r.accepted.includes(v)
             const head = !v ? 'Not answered.' : ok ? (v === r.answer ? 'Right.' : `Fine. Most interviewers would call it ${LABEL[r.answer].toLowerCase()}.`) : `Usually ${LABEL[r.answer].toLowerCase()}.`
             return (
-              <div key={r.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-panel px-3 py-2.5 max-sm:grid-cols-1">
+              <div key={r.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-glass px-3 py-2.5 max-sm:grid-cols-1">
                 <p className="m-0 min-w-0">{r.text}</p>
                 <div role="radiogroup" aria-label="Scope" className="inline-flex w-fit overflow-hidden rounded-lg border border-line2">
                   {(['must', 'nice', 'out'] as Scope[]).map((k) => (
@@ -39,7 +39,7 @@ export function ScopeStep() {
                       role="radio"
                       aria-checked={v === k}
                       onClick={() => setScope(r.id, k)}
-                      className={cn('cursor-pointer px-2.5 py-1 text-[12.5px] [&+&]:border-l [&+&]:border-line2', v === k ? 'bg-ink text-bg' : 'text-muted hover:text-ink')}
+                      className={cn('cursor-pointer px-2.5 py-1 text-[12.5px] [&+&]:border-l [&+&]:border-line2', v === k ? 'bg-accent/15 text-accent [text-shadow:0_0_8px_var(--accent)]' : 'text-muted hover:text-ink')}
                     >
                       {LABEL[k]}
                     </button>

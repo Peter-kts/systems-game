@@ -10,7 +10,7 @@ export function SimBar() {
   const { running, evalMode, speed, multiplier, simTime, phaseResults } = useSim()
   const showTimeline = evalMode || phaseResults.some((r) => r !== null)
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-panel px-3 py-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-glass px-3 py-2 backdrop-blur-md">
       <div className="flex items-center gap-1.5">
         {running ? (
           <Button size="sm" variant="primary" onClick={simControls.pause}>
@@ -26,9 +26,9 @@ export function SimBar() {
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted">Traffic</span>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Traffic</span>
         <Slider min={1} max={6} step={1} value={[multiplier]} onValueChange={([v]) => simControls.setMultiplier(v)} disabled={evalMode} />
-        <span className="w-28 font-mono text-xs tabular-nums">{fmt(LEVEL.readsPerSec * multiplier)} clicks/s</span>
+        <span className="w-28 font-mono text-xs tabular-nums text-accent">{fmt(LEVEL.readsPerSec * multiplier)} clicks/s</span>
       </div>
       <Tip content="Run the simulation faster than real time.">
         <Button size="sm" variant="ghost" onClick={simControls.toggleSpeed}>
@@ -36,7 +36,7 @@ export function SimBar() {
         </Button>
       </Tip>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted">Break</span>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Break</span>
         <Tip content="Kill one app server instance.">
           <Button size="sm" variant="danger" onClick={() => simControls.chaos('app')}>App server</Button>
         </Tip>
@@ -62,6 +62,7 @@ export function SimBar() {
               className={cn(
                 'flex min-w-0 items-center truncate rounded px-1.5',
                 phaseResults[i] === true ? 'bg-ok-soft text-ok' : phaseResults[i] === false ? 'bg-bad-soft text-bad' : 'bg-soft text-muted',
+                'font-mono uppercase tracking-wide',
               )}
             >
               {phaseResults[i] === true ? '✓ ' : phaseResults[i] === false ? '✗ ' : ''}
@@ -69,7 +70,7 @@ export function SimBar() {
             </div>
           ))}
           {evalMode && (
-            <div className="absolute inset-y-0 w-0.5 bg-ink transition-[left] duration-300" style={{ left: `${Math.min(100, simTime / 600)}%` }} />
+            <div className="absolute inset-y-0 w-0.5 bg-accent shadow-glow transition-[left] duration-300" style={{ left: `${Math.min(100, simTime / 600)}%` }} />
           )}
         </div>
       )}

@@ -1,5 +1,6 @@
 import { Cog, Database, Globe, KeyRound, Network, Rows3, Server, Share2, Smartphone, Zap, type LucideProps } from 'lucide-react'
 import type { ComponentType } from '../game/types'
+import { HUE } from './hues'
 
 const ICONS: Record<ComponentType, React.ComponentType<LucideProps>> = {
   client: Smartphone,
@@ -16,5 +17,5 @@ const ICONS: Record<ComponentType, React.ComponentType<LucideProps>> = {
 
 export function ComponentIcon({ type, size = 20, className }: { type: ComponentType; size?: number; className?: string }) {
   const Icon = ICONS[type]
-  return <Icon size={size} strokeWidth={1.8} className={className ?? 'text-accent'} aria-hidden />
+  return <Icon size={size} strokeWidth={1.8} className={className} color={className ? undefined : HUE[type]} aria-hidden />
 }

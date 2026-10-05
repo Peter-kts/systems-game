@@ -31,13 +31,13 @@ export function DebriefStep() {
       />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2.5">
         {facts.map(([k, v]) => (
-          <div key={k} className="rounded-xl border border-line bg-panel px-3 py-2.5">
+          <div key={k} className="rounded-xl border border-line bg-glass px-3 py-2.5">
             <span className="block text-xs text-muted">{k}</span>
             <strong className="font-mono text-[17px] font-medium">{v}</strong>
           </div>
         ))}
       </div>
-      <section className="grid gap-3 rounded-2xl border border-line bg-panel p-4">
+      <section className="grid gap-3 rounded-2xl border border-line bg-glass p-4">
         <h3 className="text-lg font-bold">Load test</h3>
         {lastEval ? (
           <>
@@ -48,13 +48,13 @@ export function DebriefStep() {
           <p className="m-0 text-muted">Run an evaluation in Build &amp; test to see results here.</p>
         )}
       </section>
-      <section className="grid gap-2 rounded-2xl border border-line bg-panel p-4">
+      <section className="grid gap-2 rounded-2xl border border-line bg-glass p-4">
         <h3 className="mb-1 text-lg font-bold">Design review</h3>
         {rules.map((r) => (
           <RuleItem key={r.title} rule={r} />
         ))}
       </section>
-      <section className="grid gap-3 rounded-2xl border border-line bg-panel p-4">
+      <section className="grid gap-3 rounded-2xl border border-line bg-glass p-4">
         <h3 className="text-lg font-bold">Compare with a reference design</h3>
         <p className="m-0 max-w-[65ch] text-muted">
           Users → Load balancer → 6 app servers → 128 GB cache with a replica, a key generator with 2 instances, and a 5-node NoSQL store. About
@@ -89,7 +89,7 @@ export function DebriefStep() {
       <h3 className="text-xl font-bold">What interviewers listen for</h3>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-2.5">
         {TALKING_POINTS.map(([t, d]) => (
-          <article key={t} className="rounded-xl border border-line bg-panel px-3.5 py-3">
+          <article key={t} className="rounded-xl border border-line bg-glass px-3.5 py-3">
             <h4 className="mb-1 font-display text-[15px] font-bold">{t}</h4>
             <p className="m-0 text-[13.5px] text-muted">{d}</p>
           </article>

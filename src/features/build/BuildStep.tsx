@@ -20,7 +20,7 @@ export function BuildStep() {
             <Board />
             {isStarter && !started && (
               <p className="pointer-events-none absolute left-3 top-2.5 z-10 m-0 max-w-[60ch] text-[12.5px] text-muted">
-                Starter design: fine on a whiteboard, fragile in production. Press Run to watch it, then improve it.
+                <span className="font-mono text-accent">// </span>Starter design: fine on a whiteboard, fragile in production. Press Run to watch it, then improve it.
               </p>
             )}
             <Hud />
