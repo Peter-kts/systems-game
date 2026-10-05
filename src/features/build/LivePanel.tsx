@@ -1,5 +1,5 @@
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { EVAL_SCRIPT, PHASES, TARGETS } from '../../game/levels/urlShortener'
+import { useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
 
 const axis = { stroke: 'var(--muted)', fontSize: 11, tickLine: false }
@@ -15,7 +15,7 @@ function Chart({
   tick,
 }: {
   title: string
-  dataKey: 'reads' | 'success' | 'readP99'
+  dataKey: 'reads' | 'success' | 'readP99' | 'bots'
   color: string
   unit: string
   target?: number
@@ -25,6 +25,8 @@ function Chart({
 }) {
   const series = useSim((s) => s.series)
   const graded = useSim((s) => s.evalMode || s.phaseResults.some((r) => r !== null))
+  const level = useLevel()
+  const kills = level.events.filter((e) => e.kind === 'chaos').map((e) => e.t)
   const data = series.map((s) => ({ ...s, success: Number.isNaN(s.success) ? null : s.success * 100, readP99: Number.isNaN(s.readP99) ? null : s.readP99 }))
   return (
     <figure className="m-0">
@@ -37,11 +39,11 @@ function Chart({
           <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             {graded &&
-              PHASES.map((p, i) => (
+              level.phases.map((p, i) => (
                 <ReferenceArea key={p.name} x1={p.from} x2={p.to} fill={i % 2 ? 'var(--soft)' : 'transparent'} fillOpacity={0.6} />
               ))}
-            {graded && [EVAL_SCRIPT.killDatabase, EVAL_SCRIPT.killCache].map((t) => <ReferenceLine key={t} x={t} stroke="var(--bad)" strokeDasharray="3 3" />)}
-            <XAxis dataKey="t" type="number" allowDecimals={false} domain={graded ? [0, EVAL_SCRIPT.end] : ['dataMin', 'dataMax']} {...axis} tickFormatter={(v) => `${v}s`} />
+            {graded && kills.map((t) => <ReferenceLine key={t} x={t} stroke="var(--bad)" strokeDasharray="3 3" />)}
+            <XAxis dataKey="t" type="number" allowDecimals={false} domain={graded ? [0, level.end] : ['dataMin', 'dataMax']} {...axis} tickFormatter={(v) => `${v}s`} />
             <YAxis domain={domain ?? [0, 'auto']} {...axis} width={46} allowDecimals={false} tickFormatter={tick ?? format} />
             {target !== undefined && <ReferenceLine y={target} stroke="var(--muted)" strokeDasharray="4 4" />}
             <Tooltip
@@ -57,8 +59,12 @@ function Chart({
   )
 }
 
+const thousands = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))
+
 export function LivePanel() {
   const n = useSim((s) => s.series.length)
+  const level = useLevel()
+  const { words, targets } = level
   if (!n)
     return (
       <p className="m-0 text-muted">
@@ -67,9 +73,10 @@ export function LivePanel() {
     )
   return (
     <div className="grid gap-4">
-      <Chart title="Clicks per second" dataKey="reads" color="var(--read)" unit="" format={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))} />
-      <Chart title="Success rate" dataKey="success" color="var(--ok)" unit="%" target={TARGETS.readAvailability * 100} domain={[0, 100]} format={(v) => v.toFixed(v > 99 ? 1 : 0)} tick={(v) => String(Math.round(v))} />
-      <Chart title="Click latency, p99" dataKey="readP99" color="var(--write)" unit=" ms" target={TARGETS.readP99Ms} />
+      <Chart title={`${words.reads} per second`} dataKey="reads" color="var(--read)" unit="" format={thousands} />
+      {level.bots && <Chart title="Bot requests per second" dataKey="bots" color="var(--bot)" unit="" format={thousands} />}
+      <Chart title="Success rate" dataKey="success" color="var(--ok)" unit="%" target={targets.readAvailability * 100} domain={[0, 100]} format={(v) => v.toFixed(v > 99 ? 1 : 0)} tick={(v) => String(Math.round(v))} />
+      <Chart title={`${words.read[0].toUpperCase()}${words.read.slice(1)} latency, p99`} dataKey="readP99" color="var(--write)" unit=" ms" target={targets.readP99Ms} />
       <p className="m-0 text-xs text-muted">Shaded bands are the evaluation scenarios; dashed red lines mark the moments a machine is killed.</p>
     </div>
   )

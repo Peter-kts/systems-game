@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
-import { ESTIMATES, REQUIREMENTS, TALKING_POINTS } from '../../game/levels/urlShortener'
-import { useGame } from '../../store/game'
+import { useGame, useLevel } from '../../store/game'
 import { simControls } from '../../store/sim'
 import { useReview } from '../../game/useReview'
 import { Page, PageHeader } from '../shared/Page'
@@ -10,6 +9,8 @@ import { Advice, EvalTable, RuleItem } from '../shared/results'
 export function DebriefStep() {
   const { lastEval, scope, scopeChecked, estimates, estimatesChecked, saved, loadReference, restoreMine, setStep } = useGame()
   const rules = useReview()
+  const level = useLevel()
+  const { requirements: REQUIREMENTS, estimates: ESTIMATES, talkingPoints: TALKING_POINTS } = level
   const fails = rules.filter((r) => r.lvl === 'fail').length
   const scopeGood = REQUIREMENTS.filter((r) => r.accepted.includes(scope[r.id])).length
   const estGood = ESTIMATES.filter((e) => {
@@ -57,8 +58,7 @@ export function DebriefStep() {
       <section className="grid gap-3 rounded-2xl border border-line bg-glass p-4">
         <h3 className="text-lg font-bold">Compare with a reference design</h3>
         <p className="m-0 max-w-[65ch] text-muted">
-          Users → Load balancer → 6 app servers → 128 GB cache with a replica, a key generator with 2 instances, and a 5-node NoSQL store. About
-          $2,400 a month, and it passes every scenario. Load it, run the evaluation, and compare.
+          {level.referenceSummary} Load it, run the evaluation, and compare.
         </p>
         <div className="flex flex-wrap gap-2.5">
           <Button

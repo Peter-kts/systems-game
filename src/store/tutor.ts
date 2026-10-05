@@ -1,7 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { gameSnapshot, TUTOR_SYSTEM } from '../game/tutor'
+import { getLevel } from '../game/levels'
+import { gameSnapshot, tutorSystem } from '../game/tutor'
+import { useGame } from './game'
 
 export const TUTOR_MODELS = [
   { id: 'claude-opus-5-5', label: 'Opus 5.5', note: 'best explanations' },
@@ -73,7 +75,7 @@ export const useTutor = create<TutorState>()(
             {
               model,
               max_tokens: 16000,
-              system: TUTOR_SYSTEM,
+              system: tutorSystem(getLevel(useGame.getState().levelId)),
               cache_control: { type: 'ephemeral' },
               output_config: { effort: model === 'claude-opus-5-5' ? 'medium' : 'low' },
               betas: ['server-side-fallback-2026-07-01'],

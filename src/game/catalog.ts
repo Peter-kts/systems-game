@@ -15,6 +15,8 @@ export interface ChoiceField {
   label: string
   options: number[]
   unit: string
+  /** Names to show instead of `${option} ${unit}`, for settings that pick a behaviour. */
+  labels?: string[]
   def: number
 }
 
@@ -33,6 +35,15 @@ export interface ComponentSpec {
   when: string
   watch: string
   nums: string
+}
+
+/** Text a level can override for one component: how it behaves and matters in that problem. */
+export interface ComponentNote {
+  /** Shown under the name on the board instead of the usual summary. */
+  sub?: string
+  what?: string
+  nums?: string
+  /** "In this problem": advice specific to the level. */
   here: string
 }
 
@@ -40,6 +51,8 @@ export const CACHE_HIT: Record<number, number> = { 32: 0.75, 64: 0.85, 128: 0.92
 export const CACHE_COST: Record<number, number> = { 32: 100, 64: 180, 128: 330, 256: 600 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const ALGO_NAMES = ['Token bucket', 'Fixed window', 'Sliding log']
+const FAIL_NAMES = ['Allow all', 'Reject all', 'Count locally']
 
 export const CATALOG: Record<ComponentType, ComponentSpec> = {
   client: {
@@ -49,12 +62,11 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     fields: [],
     cost: () => 0,
     count: () => 1,
-    sub: () => 'clicks + new links',
-    what: 'Browsers and phone apps. They create short links (writes) and click them (reads). Arrows on the board show which way requests travel.',
+    sub: () => 'sends requests',
+    what: 'Browsers, phone apps and other programs calling your service. Arrows on the board show which way requests travel.',
     when: 'Always the starting point of a design.',
     watch: 'Users are far from your servers. Each internet round trip costs about 40 ms in this game, or about 10 ms if a nearby CDN edge answers.',
-    nums: 'Normal day: ~4,000 clicks/s and ~40 new links/s. Viral moments: 5× that.',
-    here: 'Connect Users to whatever receives traffic first: a CDN, a load balancer, or (for a toy design) a single app server.',
+    nums: 'Each level sets its own traffic; see the Estimate step.',
   },
   cdn: {
     name: 'CDN',
@@ -67,7 +79,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Static files, images, video, and any response many users ask for. For a shortener, popular redirects can be cached at the edge.',
     watch: "If the edge serves a cached 301 (permanent) redirect, your servers never see the click, so click analytics break. Teams use 302 redirects with a short cache time, or collect the CDN's logs. Writes always pass through.",
     nums: 'Edge round trip ~10 ms vs ~40 ms to your data center. About 60% of clicks hit the edge here. $150/month.',
-    here: 'Optional. It removes a lot of load from your servers, but it conflicts with click tracking.',
   },
   lb: {
     name: 'Load balancer',
@@ -80,7 +91,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'As soon as you have more than one app server, which in production is always.',
     watch: 'A load balancer can itself be a single point of failure. Cloud load balancers like this one are managed and replicated for you; say so in the interview. Common algorithms: round robin, least connections, consistent hashing.',
     nums: 'Hundreds of thousands of requests/s, adds under 1 ms. $25/month.',
-    here: 'Put it between Users (or the CDN) and your app servers. This one sends each request to the least busy app server.',
   },
   app: {
     name: 'App server',
@@ -89,11 +99,10 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     cost: (c) => 60 * c.inst,
     count: (c) => c.inst,
     sub: (c) => plural(c.inst, 'instance'),
-    what: 'Runs your code: validates input, gets a short code, talks to the cache and database, and returns the redirect. Each instance has 16 worker threads, and a thread stays busy while it waits on the cache or database.',
+    what: 'Runs your code: validates input, talks to caches and databases, and builds the response. Each instance has 16 worker threads, and a thread stays busy while it waits on the cache or database.',
     when: 'Every design needs one. Keep app servers stateless (nothing stored on the machine) so you can add or remove instances freely.',
     watch: 'If the database slows down, threads pile up waiting, the app runs out of threads, and requests fail even though the app itself is fine. That is a cascading failure. A single instance is a single point of failure.',
     nums: '~3 ms of work per request. One instance handles roughly 3,000–4,000 requests/s here. $60/month each.',
-    here: 'Size for the 5× spike, not the average. Connect it to a cache, a database and, optionally, a key generator.',
   },
   cache: {
     name: 'Cache',
@@ -109,7 +118,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Read-heavy workloads where the same items are read again and again. Redirects are a perfect fit.',
     watch: 'Hit rate depends on memory: too small and popular links get evicted (LRU). If a cache node dies with no replica, every request falls through to the database at once. A restarted cache is empty ("cold") and takes time to warm up.',
     nums: '~0.15 ms per lookup, ~50,000 ops/s per node. Hit rate here: 32 GB 75%, 64 GB 85%, 128 GB 92%, 256 GB 95%.',
-    here: "Your hot-data estimate (~120 GB) tells you the size. A replica means a node failure doesn't wipe the cache.",
   },
   sql: {
     name: 'SQL database',
@@ -125,7 +133,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Structured data with relationships, transactions, or strict consistency needs. It also works fine for a shortener: the data is one simple table.',
     watch: "Writes only go to the primary. If it dies, writes fail until a replica is promoted (~3 s here). With no replicas, that shard's data is gone until repair. Each machine holds 2 TB, so big datasets need shards.",
     nums: 'Reads ~8 ms, ~2,000/s per machine. Writes ~15 ms, ~500/s per primary. $300/month per machine.',
-    here: "3 TB of links won't fit on one machine. Shard by short code and give each shard a replica.",
   },
   nosql: {
     name: 'NoSQL store',
@@ -138,7 +145,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Huge datasets read by key, high write volume, and when brief staleness is acceptable. Looking up a link by its code is exactly this.',
     watch: 'No joins and limited transactions. Reads can briefly see old data (eventual consistency). Fewer than 3 nodes means a single failure can lose data or availability.',
     nums: 'Reads ~5 ms, writes ~7 ms, ~3,000 ops/s per node. Usable storage = nodes × 2 TB ÷ 3 copies. $250/month per node.',
-    here: 'Scales by adding nodes, and a dead node is handled with no failover pause.',
   },
   kgs: {
     name: 'Key generator',
@@ -151,7 +157,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Whenever you need unique IDs at scale without coordination: short codes, order numbers, Snowflake-style IDs.',
     watch: 'Without it, the app hashes the URL (or picks random characters) and must check the database for a collision before every write: one extra read per write. Two instances must never hand out the same code, so each reserves its own batch.',
     nums: '~0.5 ms per code. $40/month per instance.',
-    here: 'Optional, but a classic talking point: hashing vs. counters vs. a key service.',
   },
   queue: {
     name: 'Message queue',
@@ -164,7 +169,6 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: "Work that doesn't need to finish before you reply: analytics, emails, thumbnails. It also soaks up bursts.",
     watch: 'Something has to consume the messages. If workers are slower than producers, the backlog grows without limit.',
     nums: 'Millisecond publishes, millions of messages/s. $80/month.',
-    here: 'For click analytics: each redirect publishes a click event without slowing the redirect down. Pair it with workers.',
   },
   worker: {
     name: 'Worker',
@@ -177,18 +181,46 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     when: 'Any asynchronous job pipeline.',
     watch: 'Scale workers so the queue backlog stays near zero. Batching writes keeps database load low.',
     nums: '~2,000 events/s per instance here. $60/month each.',
-    here: 'Only useful if click analytics are in scope.',
+  },
+  gateway: {
+    name: 'API gateway',
+    tag: 'Rate limits at the front door',
+    fields: [
+      { kind: 'number', key: 'inst', label: 'Instances', min: 1, max: 8, def: 2 },
+      { kind: 'choice', key: 'algo', label: 'Algorithm', options: [0, 1, 2], labels: ALGO_NAMES, unit: '', def: 0 },
+      { kind: 'choice', key: 'fail', label: 'If counters are down', options: [0, 1, 2], labels: FAIL_NAMES, unit: '', def: 0 },
+    ],
+    cost: (c) => 50 * c.inst,
+    count: (c) => c.inst,
+    sub: (c) => `${plural(c.inst, 'instance')} · ${ALGO_NAMES[c.algo]}`,
+    what: "The front door of an API (Kong, Envoy, AWS API Gateway). It authenticates each request, looks up its API key and checks that key's rate limit before passing the request on. Over the limit, it answers HTTP 429 Too Many Requests at once, so the extra traffic never reaches your servers.",
+    when: 'Public APIs and anything that must be protected from abusive or runaway clients. It is also where auth, routing and request logging usually live.',
+    watch: "Each instance only sees the share of traffic the load balancer sends it. If instances count in their own memory, a key spread over 4 instances gets 4× its limit. Shared counters fix that, but then every request needs a counter check, so decide what happens when the counter store can't be reached: allow everything (fail open), reject everything (fail closed), or count locally until it's back.",
+    nums: "~1.5 ms of work per request, about 9,000 requests/s per instance. Rejecting a request costs almost as much as allowing it. It doesn't hold a thread while your API works. $50/month per instance.",
+  },
+  counter: {
+    name: 'Counter store',
+    tag: 'Shared limits, Redis',
+    fields: [
+      { kind: 'number', key: 'shards', label: 'Shards', min: 1, max: 4, def: 1 },
+      { kind: 'number', key: 'rep', label: 'Replicas per shard', min: 0, max: 2, def: 0 },
+    ],
+    cost: (c) => 120 * c.shards * (1 + c.rep),
+    count: (c) => c.shards * (1 + c.rep),
+    sub: (c) => `${plural(c.shards, 'shard')} · ${plural(c.rep, 'replica')}`,
+    what: "An in-memory store (Redis) holding a small counter for each API key, shared by every gateway. Each check runs as one atomic command (a Lua script, or INCR with an expiry), so two gateways can't both spend a key's last token.",
+    when: "Whenever more than one machine enforces the same limit. It's the standard way to make a distributed rate limiter accurate.",
+    watch: "It's on the path of every request, so it must be fast and highly available. With no replica, a dead node means no limit checks until a new, empty one starts. Reading a counter and then writing it back from the gateway is a race; do it atomically in the store. Keys are sharded by API key, so one key's counter lives on one shard.",
+    nums: 'Each check ~0.15 ms, ~50,000 checks/s per shard. A sliding log is 3 commands per request, so ~17,000/s. A token bucket is ~100 bytes per key. $120/month per node.',
   },
 }
 
-/** Palette order (Users is always on the board and not in the palette). */
-export const PALETTE: ComponentType[] = ['cdn', 'lb', 'app', 'cache', 'sql', 'nosql', 'kgs', 'queue', 'worker']
-
 /** Which components each component may send requests to. */
 export const ALLOW: Record<ComponentType, ComponentType[]> = {
-  client: ['cdn', 'lb', 'app'],
-  cdn: ['lb', 'app'],
-  lb: ['app'],
+  client: ['cdn', 'lb', 'gateway', 'app'],
+  cdn: ['lb', 'gateway', 'app'],
+  lb: ['gateway', 'app'],
+  gateway: ['app', 'counter'],
   app: ['cache', 'sql', 'nosql', 'kgs', 'queue'],
   queue: ['worker'],
   worker: ['sql', 'nosql'],
@@ -196,11 +228,12 @@ export const ALLOW: Record<ComponentType, ComponentType[]> = {
   sql: [],
   nosql: [],
   kgs: [],
+  counter: [],
 }
 
 /** Default column on the board when a component is added by click. */
 export const COLUMN_X: Record<ComponentType, number> = {
-  client: 20, cdn: 240, lb: 240, app: 460, cache: 690, kgs: 690, queue: 690, sql: 920, nosql: 920, worker: 920,
+  client: 20, cdn: 240, lb: 240, app: 460, cache: 690, kgs: 690, queue: 690, sql: 920, nosql: 920, worker: 920, gateway: 460, counter: 690,
 }
 
 export function defaultConfig(type: ComponentType): Config {
@@ -213,16 +246,23 @@ export function defaultConfig(type: ComponentType): Config {
 export function edgeWhy(a: ComponentType, b: ComponentType): string {
   const A = CATALOG[a].name
   const B = CATALOG[b].name
-  const store: ComponentType[] = ['sql', 'nosql', 'cache']
+  const store: ComponentType[] = ['sql', 'nosql', 'cache', 'counter']
   if (a === 'client' && store.includes(b))
     return 'Users never talk to a datastore directly: it would expose credentials and skip validation. Route through an app server.'
   if (a === 'lb' && store.includes(b))
     return "A load balancer only spreads web traffic across app servers. It doesn't speak database protocols."
   if (a === 'cache' && (b === 'sql' || b === 'nosql'))
     return 'This game uses cache-aside: the app checks the cache, and on a miss reads the database itself. Connect the app to both.'
-  if (['sql', 'nosql', 'cache', 'kgs'].includes(a))
+  if (b === 'counter')
+    return 'The API gateway checks rate limits before requests reach anything else. Connect the gateway to the counter store.'
+  if (['sql', 'nosql', 'cache', 'kgs', 'counter'].includes(a))
     return `${A} only answers requests; it doesn't call other components. Draw arrows from the caller to the callee.`
   if (a === 'app' && b === 'app') return "App servers are stateless and don't call each other. Add instances on one App server instead."
+  if (a === 'gateway' && b === 'gateway') return "Gateways don't call each other. Add instances on one gateway instead."
+  if (a === 'app' && b === 'gateway')
+    return 'The gateway sits in front of your app servers and passes allowed requests on: draw API gateway → App server.'
+  if (a === 'gateway' && (b === 'lb' || b === 'cdn'))
+    return 'Arrows point the way requests travel: Users → Load balancer → API gateway → App server.'
   if (b === 'client') return 'Arrows point the way requests travel, starting from Users.'
   if (a === 'app' && (b === 'lb' || b === 'cdn'))
     return 'Arrows point the way requests travel: Users → CDN → Load balancer → App server.'

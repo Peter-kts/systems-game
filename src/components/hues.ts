@@ -12,4 +12,6 @@ export const HUE: Record<ComponentType, string> = {
   kgs: '#7dff6a',
   queue: '#2bffc6',
   worker: '#c8ff3d',
+  gateway: '#c18cff',
+  counter: '#f9f871',
 }

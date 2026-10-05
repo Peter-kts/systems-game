@@ -1,17 +1,18 @@
 import type { CSSProperties } from 'react'
 import { ComponentIcon } from '../../components/ComponentIcon'
 import { HUE } from '../../components/hues'
-import { CATALOG, PALETTE } from '../../game/catalog'
-import { useGame } from '../../store/game'
+import { CATALOG } from '../../game/catalog'
+import { useGame, useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
 import { DND_TYPE } from './Board'
 
 export function Palette() {
   const addNode = useGame((s) => s.addNode)
+  const level = useLevel()
   return (
     <aside aria-label="Components" className="flex min-h-0 flex-col gap-1.5 overflow-auto border-r border-line bg-glass p-3 backdrop-blur-md max-lg:flex-row max-lg:border-b max-lg:border-r-0 max-lg:px-4">
       <h3 className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted max-lg:hidden">Components</h3>
-      {PALETTE.map((t) => (
+      {level.palette.map((t) => (
         <button
           key={t}
           draggable

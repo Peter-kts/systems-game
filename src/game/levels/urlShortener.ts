@@ -1,49 +1,13 @@
-import type { Design, Scope } from '../types'
+import { CACHE_HIT } from '../catalog'
+import { reviewKit } from '../review'
+import type { Design } from '../types'
+import { readChecks, writeChecks } from './checks'
+import type { Estimate, Level, Requirement } from './types'
 
-export interface Requirement {
-  id: string
-  group: 'Functional' | 'Non-functional'
-  text: string
-  answer: Scope
-  accepted: Scope[]
-  why: string
-}
+const STORAGE_TB = 3
+const TB_PER_MACHINE = 2
 
-export interface Estimate {
-  id: string
-  question: string
-  unit: string
-  lo: number
-  hi: number
-  answer: string
-  work: string
-}
-
-export interface Phase {
-  name: string
-  from: number
-  to: number
-  /** Failover makes some writes slow on purpose; only their success rate is graded. */
-  skipWriteLatency?: boolean
-}
-
-export const LEVEL = {
-  title: 'URL shortener',
-  prompt: '"Design a URL shortener like bit.ly"',
-  brief:
-    "Users paste a long URL and get back a short one like sho.rt/a9Xk2Qp. Anyone who opens the short link is sent to the original page. Assume it's popular.",
-  budget: 3000,
-  readsPerSec: 4000,
-  writesPerSec: 40,
-  facts: [
-    ['New links per month', '100 million'],
-    ['Clicks per new link', '100 : 1'],
-    ['Keep links for', '5 years'],
-    ['Size of one record', '~500 bytes'],
-  ] as [string, string][],
-}
-
-export const REQUIREMENTS: Requirement[] = [
+const REQUIREMENTS: Requirement[] = [
   { id: 'shorten', group: 'Functional', text: 'Given a long URL, return a short, unique link.', answer: 'must', accepted: ['must'], why: 'This is the product. Together with redirects it defines the API: POST /urls and GET /{code}.' },
   { id: 'redirect', group: 'Functional', text: 'Opening a short link redirects to the original URL.', answer: 'must', accepted: ['must'], why: 'Redirects are about 99% of traffic, so they drive the whole design.' },
   { id: 'alias', group: 'Functional', text: 'Users can pick a custom alias, like sho.rt/my-party.', answer: 'nice', accepted: ['nice', 'out'], why: 'A common follow-up. Mention it and confirm with the interviewer before designing for it. It adds a uniqueness check on writes.' },
@@ -58,7 +22,7 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'readheavy', group: 'Non-functional', text: 'Assume about 100 clicks for every new link.', answer: 'must', accepted: ['must', 'nice'], why: 'Say this assumption out loud: it justifies caching and read replicas.' },
 ]
 
-export const ESTIMATES: Estimate[] = [
+const ESTIMATES: Estimate[] = [
   { id: 'wps', question: 'Average new links per second', unit: 'writes/s', lo: 25, hi: 60, answer: '~40', work: '100M ÷ 2.6M seconds ≈ 38, call it 40 writes/s.' },
   { id: 'rps', question: 'Average clicks per second', unit: 'reads/s', lo: 2500, hi: 6000, answer: '~4,000', work: '40 writes/s × 100 = ~4,000 reads/s. Peaks run 5–10× higher, so the evaluation throws a 5× spike at you.' },
   { id: 'links', question: 'Links stored after 5 years', unit: 'billion', lo: 4, hi: 8, answer: '6 billion', work: '100M × 12 months × 5 years = 6 billion links.' },
@@ -67,31 +31,7 @@ export const ESTIMATES: Estimate[] = [
   { id: 'cache', question: 'Cache memory for the hot links', unit: 'GB', lo: 60, hi: 250, answer: '~120 GB', work: "Clicks follow an 80/20 rule. Caching 20% of a year's links: 1.2B × 0.2 × 500 B ≈ 120 GB, so a 128 GB cache fits." },
 ]
 
-export const PHASES: Phase[] = [
-  { name: 'Normal day', from: 0, to: 10 },
-  { name: 'Viral spike, 5× traffic', from: 10, to: 25 },
-  { name: 'A database machine dies', from: 25, to: 40, skipWriteLatency: true },
-  { name: 'A cache node dies', from: 40, to: 60 },
-]
-
-/** Timeline of the graded evaluation, in simulated seconds. */
-export const EVAL_SCRIPT = {
-  spikeStart: 10,
-  spikeEnd: 25,
-  spikeMultiplier: 5,
-  killDatabase: 27,
-  killCache: 42,
-  end: 60,
-}
-
-export const TARGETS = {
-  readAvailability: 0.999,
-  readP99Ms: 100,
-  writeAvailability: 0.99,
-  writeP99Ms: 1000,
-}
-
-export const STARTER = (): Design => ({
+const starter = (): Design => ({
   nodes: [
     { id: 'client', type: 'client', x: 20, y: 280, cfg: {} },
     { id: 'n1', type: 'app', x: 460, y: 280, cfg: { inst: 1 } },
@@ -103,7 +43,7 @@ export const STARTER = (): Design => ({
   ],
 })
 
-export const REFERENCE = (): Design => ({
+const reference = (): Design => ({
   nodes: [
     { id: 'client', type: 'client', x: 20, y: 280, cfg: {} },
     { id: 'r1', type: 'lb', x: 240, y: 280, cfg: {} },
@@ -121,7 +61,7 @@ export const REFERENCE = (): Design => ({
   ],
 })
 
-export const TALKING_POINTS: [string, string][] = [
+const TALKING_POINTS: [string, string][] = [
   ['Generating short codes', 'Three options. Hash the long URL (MD5 → base62, take 7 chars) and check for collisions. Use a global counter encoded in base62 (no collisions, but guessable unless scrambled). Or a key service that pre-generates random codes. Say why you picked one.'],
   ['301 or 302?', '301 (permanent) lets browsers and CDNs cache the redirect: less load, but you lose click counts. 302 (temporary) sends every click to you: more load, full analytics.'],
   ['Data model', 'One table: code (primary key), long_url, created_at, expires_at, user_id. Every lookup is by code, which makes it a key-value workload. NoSQL or sharded SQL both work.'],
@@ -131,3 +71,167 @@ export const TALKING_POINTS: [string, string][] = [
   ['Analytics', 'Publish click events to a queue and aggregate them in workers, so redirects never wait on analytics writes.'],
   ['Abuse', 'Rate-limit link creation per user or IP, and check destination URLs against malware and phishing lists.'],
 ]
+
+function review(d: Design, scope: Record<string, string>) {
+  const analytics = scope.analytics ?? 'nice'
+  const { add, kids, typeOf, ofType, kidsOf, finish } = reviewKit(d)
+
+  const apps = ofType('app')
+  const appInstances = apps.reduce((s, n) => s + n.cfg.inst, 0)
+  const appKids = (t: Parameters<typeof kidsOf>[1]) => kidsOf(apps, t)
+
+  if (!apps.length) add('fail', "Users can't reach an app server", 'Draw a path from Users to an App server, for example Users → Load balancer → App server.')
+
+  const direct = kids('client').filter((k) => typeOf(k) === 'app')
+  if (direct.length && (appInstances > 1 || direct.length > 1))
+    add('fail', 'Users are wired straight to app servers', 'Users only know one address. Without a load balancer, one server gets all the traffic and nothing routes around failures.')
+  else if (ofType('lb').length && apps.length) add('pass', 'A load balancer spreads the traffic', 'It also stops sending requests to dead instances.')
+
+  if (apps.length && appInstances === 1)
+    add('fail', 'One app server is a single point of failure', 'If that machine dies, every link breaks. Run at least 2 instances, and enough to survive the 5× spike.')
+
+  const dbs = [...appKids('sql'), ...appKids('nosql')]
+  if (apps.length && !dbs.length) {
+    if (appKids('cache').length) add('fail', 'Your only storage is a cache', 'Caches live in memory and evict old entries, but links must survive 5 years. Add a database.')
+    else add('fail', 'Links have nowhere to live', 'Connect your app servers to a SQL database or NoSQL store.')
+  }
+  for (const db of dbs) {
+    const capacity = db.type === 'sql' ? db.cfg.shards * TB_PER_MACHINE : (db.cfg.n * TB_PER_MACHINE) / Math.min(3, db.cfg.n)
+    if (capacity < STORAGE_TB)
+      add('fail', `Not enough disk: ${capacity.toFixed(1)} TB for ${STORAGE_TB} TB of links`,
+        db.type === 'sql'
+          ? 'Each SQL machine holds 2 TB, and replicas hold copies, not extra data. Add shards: 2 shards gives 4 TB.'
+          : 'Usable space is nodes × 2 TB ÷ 3 copies. 5 nodes gives about 3.3 TB.')
+    else
+      add('pass', `Storage fits: ${capacity.toFixed(1)} TB usable for ${STORAGE_TB} TB`,
+        db.type === 'sql' ? 'Sharded by short code, so each lookup goes to exactly one shard.' : 'Keys are hashed across nodes, so data spreads evenly.')
+    if (db.type === 'sql' && db.cfg.rep === 0)
+      add('fail', 'Database machines have no replicas', 'When a primary dies, its links are unreachable until someone repairs it. Add at least one replica per shard.')
+    else if (db.type === 'nosql' && db.cfg.n < 3)
+      add('fail', 'Fewer than 3 NoSQL nodes', 'With 3 copies of each key you need at least 3 nodes, or one failure can lose data.')
+    else
+      add('pass', 'Data survives a machine failure',
+        db.type === 'sql' ? 'Replicas take over reads immediately and one is promoted to primary.' : 'Each key has copies on other nodes.')
+  }
+  if (dbs.length > 1) add('info', 'Two databases connected', "App servers use the first one they're connected to. One store is enough for this problem.")
+
+  const caches = appKids('cache')
+  if (apps.length && !caches.length)
+    add('warn', 'No cache on a 100:1 read-heavy workload', 'Every click goes to the database. A cache in front absorbs most reads in under a millisecond.')
+  for (const c of caches) {
+    const hit = Math.round(CACHE_HIT[c.cfg.size] * 100)
+    if (c.cfg.size < 128) add('warn', `Cache is smaller than the hot set (${c.cfg.size} GB vs ~120 GB)`, `Hit rate is ${hit}%. Misses go to the database.`)
+    else add('pass', 'Cache fits the hot links', `${hit}% of clicks are answered from memory.`)
+    if (c.cfg.rep === 0) add('warn', 'Cache has no replica', 'If the cache node dies, all reads hit the database at once and the cache comes back empty.')
+  }
+
+  const kgs = appKids('kgs')
+  if (apps.length && !kgs.length)
+    add('info', 'No key generator', 'Each new link hashes the URL and checks the database for a collision first: one extra read per write. Fine at 40 writes/s, but be ready to discuss it.')
+  else if (kgs.some((k) => k.cfg.inst === 1))
+    add('warn', 'One key generator is a single point of failure', "App servers fall back to hashing if it dies, but say how you'd run two that never hand out the same code.")
+  else if (kgs.length) add('pass', 'Short codes come from a key service', "No collision checks on write, and codes can be random so they aren't guessable.")
+
+  if (ofType('cdn').length) {
+    if (analytics !== 'out')
+      add('warn', 'A CDN hides clicks from your analytics', "Redirects answered at the edge never reach your servers. Use 302 redirects with a short cache time, or collect the CDN's logs.")
+    else add('pass', 'The CDN takes popular redirects off your servers', 'Clicks are answered at the edge in ~10 ms.')
+  }
+
+  const queues = ofType('queue')
+  if (analytics === 'must' && !queues.length)
+    add('warn', 'Click analytics have no pipeline', 'You marked analytics a must. Publish click events to a queue and count them with workers so redirects stay fast.')
+  for (const q of queues) {
+    if (!kids(q.id).some((k) => typeOf(k) === 'worker')) add('fail', 'The queue has no consumer', 'Messages pile up forever. Connect a Worker.')
+    else if (analytics === 'out') add('warn', 'You built analytics you scoped out', 'The queue and workers cost money for a feature you excluded.')
+    else add('pass', 'Clicks are logged asynchronously', 'Redirects publish an event and return immediately; workers count them later.')
+  }
+
+  return finish(urlShortener.budget, 'Look for oversized pieces. A cache is usually far cheaper than more database machines.')
+}
+
+export const urlShortener: Level = {
+  id: 'url-shortener',
+  difficulty: 'easy',
+  title: 'URL shortener',
+  tagline: 'Turn long links into short ones and redirect billions of clicks.',
+  teaches: ['Caching', 'Sharding', 'Replication', 'ID generation'],
+  prompt: '"Design a URL shortener like bit.ly"',
+  brief:
+    "Users paste a long URL and get back a short one like sho.rt/a9Xk2Qp. Anyone who opens the short link is sent to the original page. Assume it's popular.",
+  budget: 3000,
+  facts: [
+    ['New links per month', '100 million'],
+    ['Clicks per new link', '100 : 1'],
+    ['Keep links for', '5 years'],
+    ['Size of one record', '~500 bytes'],
+  ],
+  estimateHint: 'Handy: one month ≈ 2.6 million seconds. 62 characters (a–z, A–Z, 0–9) per code position.',
+  readsPerSec: 4000,
+  writesPerSec: 40,
+  words: { read: 'click', reads: 'Clicks', write: 'new link', writes: 'New links' },
+  targets: { readAvailability: 0.999, readP99Ms: 100 },
+  palette: ['cdn', 'lb', 'app', 'cache', 'sql', 'nosql', 'kgs', 'queue', 'worker'],
+  notes: {
+    client: {
+      sub: 'clicks + new links',
+      what: 'Browsers and phone apps. They create short links (writes) and click them (reads). Arrows on the board show which way requests travel.',
+      nums: 'Normal day: ~4,000 clicks/s and ~40 new links/s. Viral moments: 5× that.',
+      here: 'Connect Users to whatever receives traffic first: a CDN, a load balancer, or (for a toy design) a single app server.',
+    },
+    cdn: { here: 'Optional. It removes a lot of load from your servers, but it conflicts with click tracking.' },
+    lb: { here: 'Put it between Users (or the CDN) and your app servers. This one sends each request to the least busy app server.' },
+    app: {
+      what: 'Runs your code: validates input, gets a short code, talks to the cache and database, and returns the redirect. Each instance has 16 worker threads, and a thread stays busy while it waits on the cache or database.',
+      here: 'Size for the 5× spike, not the average. Connect it to a cache, a database and, optionally, a key generator.',
+    },
+    cache: { here: "Your hot-data estimate (~120 GB) tells you the size. A replica means a node failure doesn't wipe the cache." },
+    sql: { here: "3 TB of links won't fit on one machine. Shard by short code and give each shard a replica." },
+    nosql: { here: 'Scales by adding nodes, and a dead node is handled with no failover pause.' },
+    kgs: { here: 'Optional, but a classic talking point: hashing vs. counters vs. a key service.' },
+    queue: { here: 'For click analytics: each redirect publishes a click event without slowing the redirect down. Pair it with workers.' },
+    worker: { here: 'Only useful if click analytics are in scope.' },
+  },
+  requirements: REQUIREMENTS,
+  estimates: ESTIMATES,
+  phases: [
+    { name: 'Normal day', from: 0, to: 10 },
+    { name: 'Viral spike, 5× traffic', from: 10, to: 25 },
+    // Failover makes some writes slow on purpose; only their success rate is graded.
+    { name: 'A database machine dies', from: 25, to: 40, skip: ['writeP99'] },
+    { name: 'A cache node dies', from: 40, to: 60 },
+  ],
+  events: [
+    { t: 10, kind: 'traffic', multiplier: 5, say: 'Viral spike: traffic jumps to 5×.' },
+    { t: 25, kind: 'traffic', multiplier: 1 },
+    { t: 27, kind: 'chaos', target: 'db' },
+    { t: 42, kind: 'chaos', target: 'cache' },
+  ],
+  end: 60,
+  checks: [...readChecks('Clicks', 0.999, 100), ...writeChecks('New links', 0.99, 1000)],
+  evalSummary: 'A graded 60-second test: normal day, 5× spike, a database failure and a cache failure.',
+  breakable: [
+    { kind: 'app', label: 'App server', tip: 'Kill one app server instance.' },
+    { kind: 'db', label: 'Database', tip: 'Kill a database machine: a SQL primary or a NoSQL node.' },
+    { kind: 'cache', label: 'Cache', tip: 'Kill the cache node. Without a replica it restarts empty.' },
+  ],
+  starter,
+  reference,
+  referenceSummary:
+    'Users → Load balancer → 6 app servers → 128 GB cache with a replica, a key generator with 2 instances, and a 5-node NoSQL store. About $2,400 a month, and it passes every scenario.',
+  talkingPoints: TALKING_POINTS,
+  review,
+  advice: (phases) => {
+    const out: [string, string][] = []
+    const [normal, spike, db, cache] = phases
+    if (normal && !normal.pass)
+      out.push(['It fails on a normal day', 'Check the Review tab first: something on the main path is missing, overloaded, or a single machine.'])
+    if (spike && !spike.pass && normal?.pass)
+      out.push(['The 5× spike overwhelms it', "Look at which component turned red during the spike. Usually: too few app instances (each does ~3,500 req/s), or reads reaching the database because there's no cache."])
+    if (db && !db.pass)
+      out.push(['A database failure breaks it', 'Without replicas a dead machine takes its links with it. SQL replicas keep serving reads during failover; NoSQL keeps copies on other nodes.'])
+    if (cache && !cache.pass)
+      out.push(['Losing the cache breaks it', 'When the cache dies, all reads hit the database at once (a thundering herd). Add a cache replica, or give the database enough headroom.'])
+    return out
+  },
+}

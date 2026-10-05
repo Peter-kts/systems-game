@@ -2,17 +2,19 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { memo, type CSSProperties } from 'react'
 import { ComponentIcon } from '../../components/ComponentIcon'
 import { HUE } from '../../components/hues'
-import { ALLOW, CATALOG } from '../../game/catalog'
+import { ALLOW } from '../../game/catalog'
+import { specFor } from '../../game/levels'
 import { cn, fmt } from '../../lib/utils'
-import { useGame } from '../../store/game'
+import { useGame, useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
 
 export const ComponentNode = memo(function ComponentNode({ id }: NodeProps) {
   const node = useGame((s) => s.design.nodes.find((n) => n.id === id))
   const stats = useSim((s) => s.nodes[id])
   const flashing = useSim((s) => !!s.flashing[id])
+  const level = useLevel()
   if (!node) return null
-  const spec = CATALOG[node.type]
+  const spec = specFor(node.type, level)
   const count = spec.count(node.cfg)
   const live = !!stats && stats.state !== 'idle'
   return (

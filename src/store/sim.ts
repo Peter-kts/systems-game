@@ -1,11 +1,13 @@
 import { toast } from 'sonner'
 import { create } from 'zustand'
-import { EVAL_SCRIPT, LEVEL, PHASES } from '../game/levels/urlShortener'
-import { review, totalCost } from '../game/review'
+import { getLevel } from '../game/levels'
+import { totalCost } from '../game/review'
 import type { Design } from '../game/types'
 import { Simulation, type ChaosKind, type ReqType } from '../sim/engine'
-import { evaluationScript, gradePhase, secondStats, type SecondStats } from '../sim/metrics'
+import { evaluationScript, gradePhase, secondStats, simOptions, type SecondStats } from '../sim/metrics'
 import { useGame } from './game'
+
+const level = () => getLevel(useGame.getState().levelId)
 
 export type NodeState = 'idle' | 'ok' | 'warn' | 'hot' | 'down'
 
@@ -34,6 +36,8 @@ interface SimState {
   evalMode: boolean
   speed: 1 | 3
   multiplier: number
+  /** Whether the bots are attacking, in levels that have them. */
+  attack: boolean
   simTime: number
   nodes: Record<string, NodeStats>
   flashing: Record<string, true>
@@ -49,12 +53,13 @@ export const useSim = create<SimState>()((set) => ({
   evalMode: false,
   speed: 1,
   multiplier: 1,
+  attack: false,
   simTime: 0,
   nodes: {},
   flashing: {},
   series: [],
   particles: [],
-  phaseResults: PHASES.map(() => null),
+  phaseResults: [],
   tab: 'learn',
   setTab: (tab) => set({ tab }),
 }))
@@ -74,8 +79,7 @@ const prevCounts = new Map<string, { arrivals: number; drops: number; at: number
 
 function create_(design: Design) {
   return new Simulation(design, {
-    readsPerSec: LEVEL.readsPerSec,
-    writesPerSec: LEVEL.writesPerSec,
+    ...simOptions(level()),
     onHop: (from, to, type) => {
       if (pending.length < 120) pending.push({ id: particleId++, edge: `${from}>${to}`, type, born: performance.now() })
     },
@@ -152,7 +156,7 @@ function frame(ts: number) {
   }
   if (ts - lastUi > 300 && sim) {
     lastUi = ts
-    useSim.setState({ nodes: snapshotNodes() ?? {}, simTime: sim.now, multiplier: sim.multiplier })
+    useSim.setState({ nodes: snapshotNodes() ?? {}, simTime: sim.now, multiplier: sim.multiplier, attack: sim.attack })
     collectSeries()
   }
 }
@@ -179,18 +183,27 @@ export const simControls = {
       return
     }
     sim!.multiplier = useSim.getState().multiplier
+    sim!.attack = useSim.getState().attack
     useSim.setState({ running: true })
   },
   pause() {
     useSim.setState({ running: false })
   },
   reset() {
-    useSim.setState({ running: false, evalMode: false, multiplier: 1, phaseResults: PHASES.map(() => null) })
+    useSim.setState({ running: false, evalMode: false, multiplier: 1, attack: false, phaseResults: level().phases.map(() => null) })
     fresh()
   },
   setMultiplier(m: number) {
     if (sim) sim.multiplier = m
     useSim.setState({ multiplier: m })
+  },
+  toggleAttack() {
+    const on = !useSim.getState().attack
+    if (sim) sim.attack = on
+    useSim.setState({ attack: on })
+    const bots = level().bots
+    if (bots && on && useSim.getState().running)
+      toast(`Attack: ${bots.keys} API keys start sending ${bots.perKey.toLocaleString('en-US')} requests/s each.`)
   },
   toggleSpeed() {
     useSim.setState((s) => ({ speed: s.speed === 1 ? 3 : 1 }))
@@ -210,24 +223,24 @@ export const simControls = {
       return
     }
     const s = sim!
-    s.setScript(evaluationScript(s, (m) => toast(m), finishEvaluation))
+    s.setScript(evaluationScript(level(), s, (m) => toast(m), finishEvaluation))
     useSim.setState({ running: true, evalMode: true })
   },
 }
 
 function finishEvaluation() {
   if (!sim) return
-  const phases = PHASES.map((p) => gradePhase(sim!.buckets, p))
+  const lvl = level()
+  const phases = lvl.phases.map((p) => gradePhase(lvl, sim!.buckets, p))
   const game = useGame.getState()
-  const analytics = game.scope.analytics ?? 'nice'
   game.setLastEval({
     phases,
     cost: totalCost(game.design),
-    rules: review(game.design, analytics).map(({ lvl, title }) => ({ lvl, title })),
+    rules: lvl.review(game.design, game.scope).map(({ lvl, title }) => ({ lvl, title })),
     at: Date.now(),
   })
   collectSeries()
-  useSim.setState({ running: false, evalMode: false, phaseResults: phases.map((p) => p.pass), tab: 'results', simTime: EVAL_SCRIPT.end * 1000 })
+  useSim.setState({ running: false, evalMode: false, phaseResults: phases.map((p) => p.pass), tab: 'results', simTime: lvl.end * 1000 })
   const passed = phases.filter((p) => p.pass).length
   toast(`Evaluation done: ${passed} of ${phases.length} scenarios passed.`, { description: 'See the Results tab.' })
 }

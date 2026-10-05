@@ -18,6 +18,7 @@
   --soft: #0f2233;
   --read: #22e5ff;
   --write: #ff3df2;
+  --bot: #ff8a3d;
   --ok: #39ff88;
   --warn: #ffc53d;
   --bad: #ff3b5c;
@@ -43,6 +44,7 @@
   --color-soft: var(--soft);
   --color-read: var(--read);
   --color-write: var(--write);
+  --color-bot: var(--bot);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
@@ -306,6 +308,12 @@ h3 {
     0 0 6px 1px var(--write),
     0 0 14px 2px color-mix(in srgb, var(--write) 50%, transparent);
 }
+.particle.B {
+  background: #ffe0c9;
+  box-shadow:
+    0 0 6px 1px var(--bot),
+    0 0 14px 2px color-mix(in srgb, var(--bot) 50%, transparent);
+}
 @keyframes travel {
   from {
     offset-distance: 0%;
@@ -395,6 +403,10 @@ h3 {
 .vw {
   fill: var(--write);
   filter: drop-shadow(0 0 3px var(--write));
+}
+.vbot {
+  fill: var(--bot);
+  filter: drop-shadow(0 0 3px var(--bot));
 }
 .vh {
   fill: var(--ok);

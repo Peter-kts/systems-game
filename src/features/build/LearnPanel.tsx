@@ -3,16 +3,18 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { ComponentIcon } from '../../components/ComponentIcon'
 import { Button } from '../../components/ui/button'
-import { CATALOG, PALETTE } from '../../game/catalog'
+import { CATALOG } from '../../game/catalog'
+import { specFor } from '../../game/levels'
 import type { ComponentType, DesignNode } from '../../game/types'
 import { visualFor } from '../../game/visuals'
 import { cn, fmt } from '../../lib/utils'
-import { nodeName, useGame } from '../../store/game'
+import { nodeName, useGame, useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
 
 const REDUCED = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 function Visual({ type }: { type: ComponentType }) {
+  const { words, bots } = useLevel()
   return (
     <div className="rounded-xl border border-line bg-bg p-2">
       <svg
@@ -26,8 +28,9 @@ function Visual({ type }: { type: ComponentType }) {
         dangerouslySetInnerHTML={{ __html: visualFor(type) }}
       />
       <div className="mt-1 flex flex-wrap gap-3 text-[11.5px] text-muted">
-        <span><i className="mr-1 inline-block size-2 rounded-full bg-read align-middle" />click (read)</span>
-        <span><i className="mr-1 inline-block size-2 rounded-full bg-write align-middle" />new link (write)</span>
+        <span><i className="mr-1 inline-block size-2 rounded-full bg-read align-middle" />{words.read}{words.write ? ' (read)' : ''}</span>
+        {words.write && <span><i className="mr-1 inline-block size-2 rounded-full bg-write align-middle" />{words.write} (write)</span>}
+        {bots && <span><i className="mr-1 inline-block size-2 rounded-full bg-bot align-middle" />bot request</span>}
         <span><i className="mr-1 inline-block size-2 rounded-full bg-ok align-middle" />answered early</span>
       </div>
     </div>
@@ -35,7 +38,7 @@ function Visual({ type }: { type: ComponentType }) {
 }
 
 function LearnCard({ type }: { type: ComponentType }) {
-  const c = CATALOG[type]
+  const c = specFor(type, useLevel())
   const section = (h: string, body: string, extra = '') => (
     <section className={extra}>
       <h4 className="mb-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.07em] text-muted">{h}</h4>
@@ -49,7 +52,7 @@ function LearnCard({ type }: { type: ComponentType }) {
       {section('Use it when', c.when)}
       {section('Watch out for', c.watch)}
       {section('Numbers in this game', c.nums)}
-      {section('In this problem', c.here, 'rounded-xl bg-soft px-3 py-2.5')}
+      {c.here && section('In this problem', c.here, 'rounded-xl bg-soft px-3 py-2.5')}
     </div>
   )
 }
@@ -110,10 +113,10 @@ function Inspector({ node }: { node: DesignNode }) {
         <div className="grid gap-2 rounded-xl bg-bg px-3 py-2.5">
           {spec.fields.map((f) =>
             f.kind === 'choice' ? (
-              <div key={f.key} className="flex items-center justify-between gap-2.5">
+              <div key={f.key} className={cn('flex justify-between gap-x-2.5 gap-y-1.5', f.labels ? 'flex-col' : 'items-center')}>
                 <span className="text-[13px]">{f.label}</span>
-                <div role="radiogroup" aria-label={f.label} className="inline-flex overflow-hidden rounded-lg border border-line2">
-                  {f.options.map((o) => (
+                <div role="radiogroup" aria-label={f.label} className={cn('overflow-hidden rounded-lg border border-line2', f.labels ? 'grid grid-flow-col auto-cols-fr' : 'inline-flex')}>
+                  {f.options.map((o, i) => (
                     <button
                       key={o}
                       role="radio"
@@ -121,7 +124,7 @@ function Inspector({ node }: { node: DesignNode }) {
                       onClick={() => setConfig(node.id, f.key, o)}
                       className={cn('cursor-pointer px-2 py-1 font-mono text-xs [&+&]:border-l [&+&]:border-line2', node.cfg[f.key] === o ? 'bg-accent/15 text-accent [text-shadow:0_0_8px_var(--accent)]' : 'text-muted')}
                     >
-                      {o} {f.unit}
+                      {f.labels?.[i] ?? `${o} ${f.unit}`}
                     </button>
                   ))}
                 </div>
@@ -148,6 +151,7 @@ function Inspector({ node }: { node: DesignNode }) {
 function Guide() {
   const [open, setOpen] = useState<ComponentType | null>(null)
   const addNode = useGame((s) => s.addNode)
+  const level = useLevel()
   if (open)
     return (
       <div className="grid gap-3.5">
@@ -171,11 +175,12 @@ function Guide() {
         <li>Add components from the left. Click one on the board to configure it.</li>
         <li>Connect them by dragging from a component's right-hand dot to another component.</li>
         <li>Press Run to send live traffic, and use Break to kill machines.</li>
-        <li>Run evaluation for the graded 60-second test: normal day, viral spike, a database failure, a cache failure.</li>
+        {level.bots && <li>Start attack switches on the bots, so you can watch your limiter at work.</li>}
+        <li>Run evaluation for the graded {level.end}-second test: {level.phases.map((p) => p.name.toLowerCase()).join('; ')}.</li>
       </ol>
       <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Component guide</h3>
       <div className="grid grid-cols-2 gap-1.5">
-        {(['client', ...PALETTE] as ComponentType[]).map((t) => (
+        {(['client', ...level.palette] as ComponentType[]).map((t) => (
           <button key={t} onClick={() => setOpen(t)} className="flex cursor-pointer items-start gap-2 rounded-xl border border-line bg-node px-2.5 py-2 text-left text-[13px] transition-colors hover:border-accent">
             <ComponentIcon type={t} />
             <span className="grid leading-snug">
