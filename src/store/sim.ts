@@ -27,7 +27,7 @@ export interface Particle {
   born: number
 }
 
-export type PanelTab = 'learn' | 'live' | 'review' | 'results'
+export type PanelTab = 'learn' | 'live' | 'review' | 'results' | 'tutor'
 
 interface SimState {
   running: boolean
