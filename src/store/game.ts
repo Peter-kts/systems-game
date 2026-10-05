@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { ALLOW, CATALOG, COLUMN_X, defaultConfig, edgeWhy } from '../game/catalog'
-import { REFERENCE, STARTER } from '../game/levels/urlShortener'
+import { ALLOW, CATALOG, defaultConfig, edgeWhy } from '../game/catalog'
+import { columnFor, getLevel, type Level } from '../game/levels'
 import type { ComponentType, Design, Rule, Scope } from '../game/types'
 import type { PhaseResult } from '../sim/metrics'
 
@@ -16,7 +16,8 @@ export interface EvalRecord {
   at: number
 }
 
-interface GameState {
+/** Everything the player has done in one system. */
+export interface LevelProgress {
   step: Step
   design: Design
   seq: number
@@ -27,8 +28,17 @@ interface GameState {
   lastEval: EvalRecord | null
   /** The player's own design, kept while the reference design is loaded. */
   saved: Design | null
+}
+
+interface GameState extends LevelProgress {
+  /** The system being played, or null on the system select screen. */
+  levelId: string | null
+  /** Progress in the systems that aren't open right now. */
+  progress: Record<string, LevelProgress>
   selection: Selection
 
+  openLevel: (id: string) => void
+  showSystems: () => void
   setStep: (s: Step) => void
   setScope: (id: string, v: Scope) => void
   checkScope: () => void
@@ -47,8 +57,32 @@ interface GameState {
   restoreMine: () => void
 }
 
-function freeSpot(d: Design, type: ComponentType) {
-  const x = COLUMN_X[type]
+const freshProgress = (level: Level): LevelProgress => ({
+  step: 'scope',
+  design: level.starter(),
+  seq: 10,
+  scope: {},
+  scopeChecked: false,
+  estimates: {},
+  estimatesChecked: false,
+  lastEval: null,
+  saved: null,
+})
+
+const currentProgress = (s: LevelProgress): LevelProgress => ({
+  step: s.step,
+  design: s.design,
+  seq: s.seq,
+  scope: s.scope,
+  scopeChecked: s.scopeChecked,
+  estimates: s.estimates,
+  estimatesChecked: s.estimatesChecked,
+  lastEval: s.lastEval,
+  saved: s.saved,
+})
+
+function freeSpot(d: Design, type: ComponentType, level: Level) {
+  const x = columnFor(type, level)
   for (const y of [280, 150, 410, 40, 520])
     if (!d.nodes.some((n) => Math.abs(n.x - x) < 190 && Math.abs(n.y - y) < 80)) return { x, y }
   return { x: x + 30, y: 300 }
@@ -57,17 +91,22 @@ function freeSpot(d: Design, type: ComponentType) {
 export const useGame = create<GameState>()(
   persist(
     (set, get) => ({
-      step: 'scope',
-      design: STARTER(),
-      seq: 10,
-      scope: {},
-      scopeChecked: false,
-      estimates: {},
-      estimatesChecked: false,
-      lastEval: null,
-      saved: null,
+      levelId: null,
+      progress: {},
+      ...freshProgress(getLevel(null)),
       selection: null,
 
+      openLevel: (id) => {
+        const s = get()
+        if (s.levelId === id) return
+        const progress = s.levelId ? { ...s.progress, [s.levelId]: currentProgress(s) } : s.progress
+        set({ ...(progress[id] ?? freshProgress(getLevel(id))), levelId: id, progress, selection: null })
+      },
+      showSystems: () => {
+        const s = get()
+        if (!s.levelId) return
+        set({ progress: { ...s.progress, [s.levelId]: currentProgress(s) }, levelId: null, selection: null })
+      },
       setStep: (step) => set({ step }),
       setScope: (id, v) => set((s) => ({ scope: { ...s.scope, [id]: v } })),
       checkScope: () => set({ scopeChecked: true }),
@@ -75,9 +114,9 @@ export const useGame = create<GameState>()(
       checkEstimates: () => set({ estimatesChecked: true }),
 
       addNode: (type, pos) => {
-        const { design, seq } = get()
+        const { design, seq, levelId } = get()
         const id = `n${seq}`
-        const p = pos ?? freeSpot(design, type)
+        const p = pos ?? freeSpot(design, type, getLevel(levelId))
         set({
           seq: seq + 1,
           design: { ...design, nodes: [...design.nodes, { id, type, x: Math.round(p.x), y: Math.round(p.y), cfg: defaultConfig(type) }] },
@@ -113,9 +152,9 @@ export const useGame = create<GameState>()(
       select: (selection) => set({ selection }),
       setLastEval: (lastEval) => set({ lastEval }),
       loadReference: () => {
-        const { design, saved } = get()
+        const { design, saved, levelId } = get()
         const showingReference = design.nodes.some((n) => n.id === 'r1')
-        set({ saved: showingReference ? saved : structuredClone(design), design: REFERENCE(), selection: null })
+        set({ saved: showingReference ? saved : structuredClone(design), design: getLevel(levelId).reference(), selection: null })
       },
       restoreMine: () => {
         const { saved } = get()
@@ -124,11 +163,30 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'system-design-lab',
-      version: 1,
+      version: 2,
       partialize: ({ selection: _selection, ...rest }) => rest,
+      migrate: (old, version) => {
+        const s = old as Record<string, unknown>
+        if (version < 2) {
+          // Version 1 had a single level, the URL shortener, and graded fixed columns.
+          const ev = s.lastEval as { phases: Record<string, unknown>[] } | null
+          if (ev)
+            ev.phases = ev.phases.map((p) => ({
+              name: p.name,
+              values: [p.readAvailability, p.readP99, p.writeAvailability, p.writeP99],
+              checks: (p.checks as boolean[]).map((c, i) => (i === 3 && p.skipWriteLatency ? null : c)),
+              pass: p.pass,
+            }))
+          return { ...s, levelId: 'url-shortener', progress: {} }
+        }
+        return s
+      },
     },
   ),
 )
+
+/** The level being played (the URL shortener while the select screen is open). */
+export const useLevel = () => getLevel(useGame((s) => s.levelId))
 
 export const nodeName = (d: Design, id: string) => {
   const t = d.nodes.find((n) => n.id === id)?.type

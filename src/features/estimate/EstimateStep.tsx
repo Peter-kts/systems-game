@@ -1,11 +1,12 @@
 import { Button } from '../../components/ui/button'
-import { ESTIMATES, LEVEL } from '../../game/levels/urlShortener'
 import { cn } from '../../lib/utils'
-import { useGame } from '../../store/game'
+import { useGame, useLevel } from '../../store/game'
 import { Page, PageHeader } from '../shared/Page'
 
 export function EstimateStep() {
   const { estimates, estimatesChecked, setEstimate, checkEstimates, setStep } = useGame()
+  const level = useLevel()
+  const ESTIMATES = level.estimates
   const inRange = (id: string, lo: number, hi: number) => {
     const n = parseFloat(estimates[id])
     return n >= lo && n <= hi
@@ -19,14 +20,14 @@ export function EstimateStep() {
         lead="Rough numbers decide the design: they tell you whether one database is enough, whether you need a cache, and how big it should be. Round freely; interviewers want the right order of magnitude."
       />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2.5">
-        {LEVEL.facts.map(([k, v]) => (
+        {level.facts.map(([k, v]) => (
           <div key={k} className="rounded-xl border border-line bg-glass px-3 py-2.5">
             <span className="block text-xs text-muted">{k}</span>
             <strong className="font-mono text-[17px] font-medium">{v}</strong>
           </div>
         ))}
       </div>
-      <p className="m-0 text-[13px] text-muted">Handy: one month ≈ 2.6 million seconds. 62 characters (a–z, A–Z, 0–9) per code position.</p>
+      <p className="m-0 text-[13px] text-muted">{level.estimateHint}</p>
       <div className="grid gap-2">
         {ESTIMATES.map((e) => {
           const raw = estimates[e.id] ?? ''

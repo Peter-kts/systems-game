@@ -1,9 +1,8 @@
 import { Button } from '../../components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
-import { PHASES, TARGETS } from '../../game/levels/urlShortener'
 import { useReview } from '../../game/useReview'
 import { cn, fmt } from '../../lib/utils'
-import { useGame } from '../../store/game'
+import { useGame, useLevel } from '../../store/game'
 import { useSim, type PanelTab } from '../../store/sim'
 import { Advice, EvalTable, RuleItem } from '../shared/results'
 import { LearnPanel } from './LearnPanel'
@@ -25,6 +24,7 @@ function ReviewPanel() {
 function ResultsPanel() {
   const ev = useGame((s) => s.lastEval)
   const setStep = useGame((s) => s.setStep)
+  const level = useLevel()
   if (!ev)
     return (
       <div className="grid gap-2 text-muted">
@@ -32,15 +32,14 @@ function ResultsPanel() {
           No evaluation yet. Press <b className="text-ink">Run evaluation</b> for the graded 60-second test:
         </p>
         <ol className="m-0 grid gap-1 pl-4 text-[13px]">
-          {PHASES.map((p) => (
+          {level.phases.map((p) => (
             <li key={p.name}>
               <b className="text-ink">{p.name}</b> ({p.from}–{p.to} s)
             </li>
           ))}
         </ol>
         <p className="m-0 text-[13px]">
-          Each scenario checks click success ≥ {TARGETS.readAvailability * 100}%, click p99 ≤ {TARGETS.readP99Ms} ms, new-link success ≥{' '}
-          {TARGETS.writeAvailability * 100}% and new-link p99 ≤ {TARGETS.writeP99Ms / 1000} s.
+          Each scenario checks {level.checks.map((c) => `${c.label.toLowerCase()} ${c.target}`).join(', ')}.
         </p>
       </div>
     )

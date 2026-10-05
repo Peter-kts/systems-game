@@ -1,4 +1,4 @@
-import { Cog, Database, Globe, KeyRound, Network, Rows3, Server, Share2, Smartphone, Zap, type LucideProps } from 'lucide-react'
+import { Cog, Database, Globe, KeyRound, Network, Rows3, Server, Share2, ShieldCheck, Smartphone, Tally5, Zap, type LucideProps } from 'lucide-react'
 import type { ComponentType } from '../game/types'
 import { HUE } from './hues'
 
@@ -13,6 +13,8 @@ const ICONS: Record<ComponentType, React.ComponentType<LucideProps>> = {
   kgs: KeyRound,
   queue: Rows3,
   worker: Cog,
+  gateway: ShieldCheck,
+  counter: Tally5,
 }
 
 export function ComponentIcon({ type, size = 20, className }: { type: ComponentType; size?: number; className?: string }) {

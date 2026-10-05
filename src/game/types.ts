@@ -9,6 +9,8 @@ export type ComponentType =
   | 'kgs'
   | 'queue'
   | 'worker'
+  | 'gateway'
+  | 'counter'
 
 export type Config = Record<string, number>
 

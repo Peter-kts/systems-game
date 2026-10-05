@@ -1,17 +1,17 @@
 import { useGame } from '../store/game'
 import { useSim } from '../store/sim'
 import { CATALOG } from './catalog'
-import { ESTIMATES, LEVEL, PHASES, REQUIREMENTS, TALKING_POINTS, TARGETS } from './levels/urlShortener'
-import { review, totalCost } from './review'
+import { getLevel, specFor, type Level } from './levels'
+import { totalCost } from './review'
 
 const pct = (v: number) => (Number.isNaN(v) ? 'n/a' : `${(v * 100).toFixed(2)}%`)
 const ms = (v: number) => (Number.isNaN(v) ? 'n/a' : `${Math.round(v)} ms`)
 
 /**
  * Everything that stays the same between questions: the tutor's role, the level and the
- * component explanations. Kept byte-stable so the API can cache it.
+ * component explanations. Kept byte-stable per level so the API can cache it.
  */
-export const TUTOR_SYSTEM = [
+export const tutorSystem = (level: Level) => [
   `You are the tutor inside System Design Lab, a game for practising system design interviews (Google/Meta style).
 The player is learning. They build an architecture by dragging components onto a board and wiring them up, then a discrete-event queueing simulation load-tests it.
 
@@ -22,38 +22,41 @@ How to answer:
 - When the player asks what to change, give the one or two highest-impact changes first and say what they fix.
 - If a question is outside this level (another system, a general concept), answer it anyway; you are a general system design tutor.
 - Never invent simulation results. Only quote numbers that appear in the snapshot or the reference below.`,
-  `# Level 1: ${LEVEL.title}
-Prompt: ${LEVEL.prompt}
-Brief: ${LEVEL.brief}
-Facts: ${LEVEL.facts.map(([k, v]) => `${k}: ${v}`).join('; ')}
-Budget: $${LEVEL.budget}/month. Base load: ${LEVEL.readsPerSec} clicks/s (reads), ${LEVEL.writesPerSec} new links/s (writes).
+  `# System: ${level.title} (${level.difficulty})
+Prompt: ${level.prompt}
+Brief: ${level.brief}
+Facts: ${level.facts.map(([k, v]) => `${k}: ${v}`).join('; ')}
+Budget: $${level.budget}/month. Base load: ${level.readsPerSec} ${level.words.reads.toLowerCase()}/s (reads)${level.words.writes ? `, ${level.writesPerSec} ${level.words.writes.toLowerCase()}/s (writes)` : ''}.${level.bots ? `\nAttack traffic: ${level.bots.keys} API keys sending ${level.bots.perKey} requests/s each; the limit is ${level.bots.limit} requests/s per key.` : ''}
 
 ## Scope step (correct answers)
-${REQUIREMENTS.map((r) => `- ${r.text} → ${r.answer}. ${r.why}`).join('\n')}
+${level.requirements.map((r) => `- ${r.text} → ${r.answer}. ${r.why}`).join('\n')}
 
 ## Estimate step (accepted ranges)
-${ESTIMATES.map((e) => `- ${e.question} → ${e.answer} (${e.lo}–${e.hi} ${e.unit}). ${e.work}`).join('\n')}
+${level.estimates.map((e) => `- ${e.question} → ${e.answer} (${e.lo}–${e.hi} ${e.unit}). ${e.work}`).join('\n')}
 
-## Graded evaluation (60 s)
-${PHASES.map((p) => `- ${p.name}: ${p.from}–${p.to} s${p.skipWriteLatency ? ' (write latency not graded)' : ''}`).join('\n')}
-Each scenario passes when click success ≥ ${TARGETS.readAvailability * 100}%, click p99 ≤ ${TARGETS.readP99Ms} ms, new-link success ≥ ${TARGETS.writeAvailability * 100}%, new-link p99 ≤ ${TARGETS.writeP99Ms / 1000} s.
+## Graded evaluation (${level.end} s)
+${level.evalSummary}
+${level.phases.map((p) => `- ${p.name}: ${p.from}–${p.to} s${p.skip?.length ? ` (not graded: ${p.skip.join(', ')})` : ''}${p.botTolerance ? ` (bots may reach ${p.botTolerance}× the limit)` : ''}`).join('\n')}
+Each scenario checks: ${level.checks.map((c) => `${c.label} ${c.target}`).join('; ')}.
 
 ## Components in the game
-${Object.values(CATALOG)
-  .map((c) => `### ${c.name} (${c.tag})\nWhat: ${c.what}\nUse when: ${c.when}\nWatch out: ${c.watch}\nNumbers: ${c.nums}\nIn this problem: ${c.here}`)
+${(['client', ...level.palette] as const)
+  .map((t) => specFor(t, level))
+  .map((c) => `### ${c.name} (${c.tag})\nWhat: ${c.what}\nUse when: ${c.when}\nWatch out: ${c.watch}\nNumbers: ${c.nums}${c.here ? `\nIn this problem: ${c.here}` : ''}`)
   .join('\n\n')}
 
 ## Interview talking points
-${TALKING_POINTS.map(([t, d]) => `- ${t}: ${d}`).join('\n')}
+${level.talkingPoints.map(([t, d]) => `- ${t}: ${d}`).join('\n')}
 
 ## Reference design
-Users → Load balancer → 6 app servers → 128 GB cache with a replica, a key generator with 2 instances, and a 5-node NoSQL store. About $2,375/month; passes every scenario.`,
+${level.referenceSummary}`,
 ].join('\n\n')
 
 /** A plain-text snapshot of what the player is looking at right now. */
 export function gameSnapshot(): string {
   const g = useGame.getState()
   const s = useSim.getState()
+  const level = getLevel(g.levelId)
   const d = g.design
   const name = (id: string) => {
     const n = d.nodes.find((x) => x.id === id)
@@ -63,7 +66,7 @@ export function gameSnapshot(): string {
 
   lines.push(
     '',
-    `Design (cost $${totalCost(d)}/month of $${LEVEL.budget}):`,
+    `Design (cost $${totalCost(d)}/month of $${level.budget}):`,
     ...d.nodes.map((n) => `- ${name(n.id)}: ${CATALOG[n.type].sub(n.cfg)} ($${CATALOG[n.type].cost(n.cfg)}/month)`),
     'Connections:',
     ...(d.edges.length ? d.edges.map((e) => `- ${name(e.from)} → ${name(e.to)}`) : ['- none']),
@@ -72,15 +75,25 @@ export function gameSnapshot(): string {
   if (g.selection?.kind === 'node') lines.push('', `Selected: ${name(g.selection.id)}`)
   else if (g.selection?.kind === 'edge') lines.push('', `Selected connection: ${name(g.selection.from)} → ${name(g.selection.to)}`)
 
-  const rules = review(d, g.scope.analytics ?? 'nice')
+  const rules = level.review(d, g.scope)
   lines.push('', 'Design review:', ...rules.map((r) => `- [${r.lvl}] ${r.title}${r.detail ? `: ${r.detail}` : ''}`))
 
   if (s.simTime > 0) {
     const last = s.series.at(-1)
-    lines.push('', `Simulation: ${s.running ? 'running' : 'paused'} at ${(s.simTime / 1000).toFixed(1)} s${s.evalMode ? ' (graded evaluation)' : ''}, traffic ×${s.multiplier}`)
+    const w = level.words
+    lines.push('', `Simulation: ${s.running ? 'running' : 'paused'} at ${(s.simTime / 1000).toFixed(1)} s${s.evalMode ? ' (graded evaluation)' : ''}, traffic ×${s.multiplier}${level.bots ? `, bot attack ${s.attack ? 'on' : 'off'}` : ''}`)
     if (last)
       lines.push(
-        `Last second: ${Math.round(last.reads)} clicks/s, success ${pct(last.success)}, click p99 ${ms(last.readP99)}, new-link p99 ${ms(last.writeP99)}, cache hits ${pct(last.hitRate)}`,
+        [
+          `Last second: ${Math.round(last.reads)} ${w.reads.toLowerCase()}/s`,
+          `success ${pct(last.success)}`,
+          `${w.read} p99 ${ms(last.readP99)}`,
+          w.write && `${w.write} p99 ${ms(last.writeP99)}`,
+          !Number.isNaN(last.hitRate) && `cache hits ${pct(last.hitRate)}`,
+          last.bots > 0 && `${Math.round(last.bots)} bot requests/s, ${pct(last.botsBlocked)} blocked`,
+        ]
+          .filter(Boolean)
+          .join(', '),
       )
     for (const [id, st] of Object.entries(s.nodes))
       lines.push(`- ${name(id)}: ${st.state}, ${Math.round(st.rate)} req/s, ${Math.round(st.util * 100)}% busy, ${Math.round(st.dropRate)} dropped/s`)
@@ -90,14 +103,16 @@ export function gameSnapshot(): string {
     lines.push('', `Last graded evaluation (design cost $${g.lastEval.cost}):`)
     for (const p of g.lastEval.phases)
       lines.push(
-        `- ${p.name}: ${p.pass ? 'PASS' : 'FAIL'}; clicks OK ${pct(p.readAvailability)}, click p99 ${ms(p.readP99)}, new links OK ${pct(p.writeAvailability)}, new-link p99 ${ms(p.writeP99)}`,
+        `- ${p.name}: ${p.pass ? 'PASS' : 'FAIL'}; ${level.checks
+          .map((c, i) => `${c.label} ${c.format(p.values[i])}${p.checks[i] === null ? ' (not graded)' : p.checks[i] ? '' : ' (missed)'}`)
+          .join(', ')}`,
       )
   }
 
   if (g.scopeChecked)
-    lines.push('', 'Player scope answers:', ...REQUIREMENTS.map((r) => `- ${r.text}: ${g.scope[r.id] ?? 'unanswered'} (expected ${r.answer})`))
+    lines.push('', 'Player scope answers:', ...level.requirements.map((r) => `- ${r.text}: ${g.scope[r.id] ?? 'unanswered'} (expected ${r.answer})`))
   if (g.estimatesChecked)
-    lines.push('', 'Player estimates:', ...ESTIMATES.map((e) => `- ${e.question}: ${g.estimates[e.id] || 'blank'} ${e.unit} (accepted ${e.lo}–${e.hi})`))
+    lines.push('', 'Player estimates:', ...level.estimates.map((e) => `- ${e.question}: ${g.estimates[e.id] || 'blank'} ${e.unit} (accepted ${e.lo}–${e.hi})`))
 
   return lines.join('\n')
 }

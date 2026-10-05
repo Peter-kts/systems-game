@@ -1,14 +1,15 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Cpu } from 'lucide-react'
+import { Cpu, LayoutGrid } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 import { DebriefStep } from './features/debrief/DebriefStep'
 import { EstimateStep } from './features/estimate/EstimateStep'
 import { ScopeStep } from './features/scope/ScopeStep'
-import { LEVEL } from './game/levels/urlShortener'
+import { SystemSelect } from './features/select/SystemSelect'
 import { cn } from './lib/utils'
-import { useGame, type Step } from './store/game'
+import { useGame, useLevel, type Step } from './store/game'
+import { simControls } from './store/sim'
 
 // The board, simulation and charts are the heavy part; load them when first needed.
 const BuildStep = lazy(() => import('./features/build/BuildStep').then((m) => ({ default: m.BuildStep })))
@@ -30,6 +31,9 @@ const VIEWS: Record<Step, React.ComponentType> = {
 export default function App() {
   const step = useGame((s) => s.step)
   const setStep = useGame((s) => s.setStep)
+  const playing = useGame((s) => !!s.levelId)
+  const showSystems = useGame((s) => s.showSystems)
+  const level = useLevel()
   const done: Record<Step, boolean> = {
     scope: useGame((s) => s.scopeChecked),
     estimate: useGame((s) => s.estimatesChecked),
@@ -37,7 +41,8 @@ export default function App() {
     debrief: false,
   }
   const reduce = useReducedMotion()
-  const View = VIEWS[step]
+  const View = playing ? VIEWS[step] : SystemSelect
+  const viewKey = playing ? `${level.id}:${step}` : 'select'
   return (
     <TooltipProvider>
       <div className="grid h-full min-h-0 grid-rows-[auto_1fr] max-lg:h-auto max-lg:min-h-full">
@@ -49,9 +54,21 @@ export default function App() {
             <h1 className="text-[19px] font-bold tracking-tight">
               System Design <span className="neon-text">Lab</span>
             </h1>
-            <span className="rounded-md border border-line2 px-2 py-0.5 font-mono text-[11px] text-muted">LVL 1 · {LEVEL.title}</span>
+            {playing && (
+              <button
+                onClick={() => {
+                  showSystems()
+                  simControls.reset()
+                }}
+                title="Choose another system"
+                className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line2 px-2 py-0.5 font-mono text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
+              >
+                <LayoutGrid size={12} aria-hidden />
+                <span className="uppercase">{level.difficulty}</span> · {level.title}
+              </button>
+            )}
           </div>
-          <nav aria-label="Steps" className="ml-auto flex flex-wrap gap-1 max-sm:ml-0">
+          {playing && <nav aria-label="Steps" className="ml-auto flex flex-wrap gap-1 max-sm:ml-0">
             {STEPS.map((s, i) => (
               <button
                 key={s.id}
@@ -73,12 +90,12 @@ export default function App() {
                 <span className="max-sm:hidden">{s.label}</span>
               </button>
             ))}
-          </nav>
+          </nav>}
         </header>
         <main className="relative min-h-0 overflow-hidden max-lg:overflow-visible">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={step}
+              key={viewKey}
               className="h-full"
               initial={reduce ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}

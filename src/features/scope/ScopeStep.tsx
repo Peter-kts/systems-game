@@ -1,25 +1,26 @@
 import { Button } from '../../components/ui/button'
-import { LEVEL, REQUIREMENTS } from '../../game/levels/urlShortener'
 import type { Scope } from '../../game/types'
 import { cn } from '../../lib/utils'
-import { useGame } from '../../store/game'
+import { useGame, useLevel } from '../../store/game'
 import { Page, PageHeader } from '../shared/Page'
 
 const LABEL: Record<Scope, string> = { must: 'Must have', nice: 'Nice to have', out: 'Out of scope' }
 
 export function ScopeStep() {
   const { scope, scopeChecked, setScope, checkScope, setStep } = useGame()
+  const level = useLevel()
+  const REQUIREMENTS = level.requirements
   const good = REQUIREMENTS.filter((r) => r.accepted.includes(scope[r.id])).length
   return (
     <Page>
       <PageHeader
         eyebrow="Step 1 · Clarify requirements"
-        title={LEVEL.prompt}
+        title={level.prompt}
         lead="Interviews start vague on purpose. Spend the first five minutes deciding what's in scope. Sort each statement, then check your answers."
       />
       <div className="rounded-2xl border border-line bg-glass px-4.5 py-4">
         <p className="m-0 max-w-[65ch]">
-          <b>The interviewer says:</b> {LEVEL.brief}
+          <b>The interviewer says:</b> {level.brief}
         </p>
       </div>
       {(['Functional', 'Non-functional'] as const).map((g) => (

@@ -65,6 +65,17 @@ const VISUALS: Record<ComponentType, string> = {
     box(4, 42, 56, 26, 'Queue') + box(98, 42, 58, 26, 'Worker') + cyl(204, 32, 48, 44, 'DB') + line('M60 55H98M156 55H204') +
     [0, -0.2, -0.4].map((b) => dot('M60 55H98', 0.6, b, 'vr', 2.5)).join('') + dot('M156 55H204', 2.4, 0, 'vr', 6) +
     caption('Many events in, one batched write out'),
+  gateway:
+    box(4, 42, 46, 26, 'Users') + box(102, 34, 60, 42, 'Gateway') + box(206, 42, 48, 26, 'API') + line('M50 55H102') + line('M162 55H206') +
+    dot('M50 50H102H162H206', 1.8, 0) + dot('M50 50H102H162H206', 1.8, -0.9) +
+    [0, -0.3, -0.6, -0.9, -1.2].map((b) => dot('M50 60H100L50 60', 1.5, b, 'vbot', 3)).join('') +
+    `<text class="vt" x="76" y="84" text-anchor="middle" style="fill:var(--bot)">429</text>` +
+    caption('Within the limit: passed on · Over it: 429 at once'),
+  counter:
+    box(6, 10, 64, 24, 'Gateway') + box(6, 76, 64, 24, 'Gateway') + cyl(170, 30, 80, 50, 'key: 37/50') +
+    line('M70 22L170 45') + line('M70 88L170 65') +
+    dot('M70 22L170 45L70 22', 1.6, 0) + dot('M70 88L170 65L70 88', 1.6, -0.8) +
+    caption('Every gateway checks the same count'),
 }
 
 export const visualFor = (t: ComponentType) => VISUALS[t]
