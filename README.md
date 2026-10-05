@@ -7,10 +7,25 @@ architecture from components (load balancers, caches, databases, queues...), the
 discrete-event queueing simulation that injects traffic spikes and machine failures. A rule-based review
 explains what an interviewer would flag.
 
-## Current state
+## Run it
 
-`prototype/index.html` is the first playable version (Level 1: URL shortener). It is a single
-self-contained page with no build step: open it in a browser.
+```sh
+npm install
+npm run dev      # http://localhost:5173
+npm test         # simulation calibration tests
+npm run build    # static site in dist/ (relative paths, host anywhere)
+```
 
-Next step: move to a Vite + React + TypeScript app (React Flow for the board, charts for live metrics)
-and add more levels.
+## Layout
+
+| Path | What lives there |
+| --- | --- |
+| `src/game/` | Component catalog, level content (`levels/urlShortener.ts`), design review rules, explainer visuals |
+| `src/sim/` | Queueing simulation engine and metrics. Pure TypeScript, no UI, covered by tests |
+| `src/store/` | Zustand stores: the saved game (`game.ts`) and the live simulation loop (`sim.ts`) |
+| `src/features/` | One folder per step: scope, estimate, build (React Flow board, panels, charts), debrief |
+| `src/components/ui/` | Small shadcn-style components built on Radix |
+| `prototype/` | The original single-file prototype, kept for reference |
+
+Built with Vite, React, TypeScript, React Flow, Recharts, Tailwind CSS, Radix, Lucide and Motion.
+Progress is saved in the browser's local storage.
