@@ -1,4 +1,5 @@
-import { ArrowUp, KeyRound, RotateCcw, Sparkles, Square } from 'lucide-react'
+import { ArrowUp, KeyRound, Maximize2, Minimize2, RotateCcw, Sparkles, Square } from 'lucide-react'
+import { Dialog } from 'radix-ui'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -97,8 +98,8 @@ function suggestions(selected: string | null, evaluated: boolean): string[] {
   return out
 }
 
-export function TutorPanel() {
-  const { apiKey, messages, busy, ask, stop, clear } = useTutor()
+function Chat({ large = false, onSettings, onExpand }: { large?: boolean; onSettings: () => void; onExpand: () => void }) {
+  const { messages, busy, ask, stop, clear } = useTutor()
   const selected = useGame((s) => {
     if (s.selection?.kind !== 'node') return null
     const id = s.selection.id
@@ -107,15 +108,16 @@ export function TutorPanel() {
   })
   const evaluated = useGame((s) => !!s.lastEval)
   const [draft, setDraft] = useState('')
-  const [settings, setSettings] = useState(false)
-  const end = useRef<HTMLDivElement>(null)
-  const last = messages.at(-1)?.text
+  const list = useRef<HTMLDivElement>(null)
 
+  // When a question is sent, bring it to the top so the answer is read from its start
+  // instead of the view chasing the end of the text while it streams in.
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'end' })
-  }, [messages.length, last])
-
-  if (!apiKey || settings) return <KeySettings onDone={() => setSettings(false)} />
+    const box = list.current
+    const asked = box?.querySelectorAll<HTMLElement>('[data-role="user"]')
+    const el = asked?.[asked.length - 1]
+    if (box && el) box.scrollTo({ top: el.offsetTop - 4, behavior: 'smooth' })
+  }, [messages.length])
 
   const send = (q: string) => {
     if (!q.trim() || busy) return
@@ -126,23 +128,27 @@ export function TutorPanel() {
     e.preventDefault()
     send(draft)
   }
+  const text = large ? 'text-[15px]' : 'text-[13.5px]'
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Sparkles size={16} className="text-accent" aria-hidden />
+      <div className="flex items-center gap-1">
+        <Sparkles size={16} className="mr-1 shrink-0 text-accent" aria-hidden />
         <span className="flex-1 text-[13px] text-muted">Ask anything. The tutor sees your board, live numbers and results.</span>
         {messages.length > 0 && (
           <Button size="icon" variant="ghost" aria-label="New conversation" onClick={clear}>
             <RotateCcw />
           </Button>
         )}
-        <Button size="icon" variant="ghost" aria-label="Key settings" onClick={() => setSettings(true)}>
+        <Button size="icon" variant="ghost" aria-label="Key settings" onClick={onSettings}>
           <KeyRound />
+        </Button>
+        <Button size="icon" variant="ghost" aria-label={large ? 'Back to the side panel' : 'Expand the chat'} onClick={onExpand}>
+          {large ? <Minimize2 /> : <Maximize2 />}
         </Button>
       </div>
 
-      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto pr-0.5" aria-live="polite">
+      <div ref={list} className="relative grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain pr-1" aria-live="polite">
         {messages.length === 0 && (
           <div className="grid gap-1.5">
             {suggestions(selected, evaluated).map((q) => (
@@ -158,11 +164,11 @@ export function TutorPanel() {
         )}
         {messages.map((m, i) =>
           m.role === 'user' ? (
-            <div key={i} className="ml-6 rounded-xl rounded-br-sm border border-accent/30 bg-accent/10 px-3 py-2 text-[13.5px]">
+            <div key={i} data-role="user" className={cn('ml-6 rounded-xl rounded-br-sm border border-accent/30 bg-accent/10 px-3 py-2', text)}>
               {m.text}
             </div>
           ) : (
-            <div key={i} className={cn('tutor-md text-[13.5px]', m.error && 'text-bad')}>
+            <div key={i} className={cn('tutor-md min-w-0', text, m.error && 'text-bad')}>
               {m.text ? (
                 <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
               ) : (
@@ -171,13 +177,12 @@ export function TutorPanel() {
             </div>
           ),
         )}
-        <div ref={end} />
       </div>
 
       <form onSubmit={onSubmit} className="flex items-end gap-1.5 rounded-xl border border-line2 bg-bg p-1.5 focus-within:border-accent focus-within:shadow-glow">
         <textarea
           aria-label="Ask the tutor"
-          rows={2}
+          rows={large ? 3 : 2}
           value={draft}
           placeholder="Why is my cache hit rate only 75%?"
           onChange={(e) => setDraft(e.target.value)}
@@ -187,7 +192,7 @@ export function TutorPanel() {
               send(draft)
             }
           }}
-          className="min-h-10 flex-1 resize-none bg-transparent px-1.5 py-1 text-[13.5px] text-ink outline-none placeholder:text-muted"
+          className={cn('min-h-10 flex-1 resize-none bg-transparent px-1.5 py-1 text-ink outline-none placeholder:text-muted', text)}
         />
         {busy ? (
           <Button type="button" size="icon" variant="danger" aria-label="Stop" onClick={stop}>
@@ -200,5 +205,51 @@ export function TutorPanel() {
         )}
       </form>
     </div>
+  )
+}
+
+export function TutorPanel() {
+  const apiKey = useTutor((s) => s.apiKey)
+  const [settings, setSettings] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  if (!apiKey || settings) return <KeySettings onDone={() => setSettings(false)} />
+
+  return (
+    <>
+      {expanded ? (
+        <div className="grid h-full place-content-center gap-2 text-center text-[13px] text-muted">
+          <p className="m-0">The tutor is open in the large view.</p>
+          <Button size="sm" onClick={() => setExpanded(false)}>
+            <Minimize2 /> Bring it back here
+          </Button>
+        </div>
+      ) : (
+        <Chat onSettings={() => setSettings(true)} onExpand={() => setExpanded(true)} />
+      )}
+      <Dialog.Root open={expanded} onOpenChange={setExpanded}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-bg/70 backdrop-blur-sm" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="fixed left-1/2 top-1/2 z-50 flex h-[min(88vh,900px)] w-[min(calc(100vw-32px),920px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-accent/40 bg-panel p-4 shadow-glow outline-none"
+          >
+            <Dialog.Title className="mb-2 font-display text-lg font-bold">
+              Tutor <span className="font-sans text-[13px] font-normal text-muted">· press Esc to close</span>
+            </Dialog.Title>
+            <div className="min-h-0 flex-1">
+              <Chat
+                large
+                onSettings={() => {
+                  setExpanded(false)
+                  setSettings(true)
+                }}
+                onExpand={() => setExpanded(false)}
+              />
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   )
 }
