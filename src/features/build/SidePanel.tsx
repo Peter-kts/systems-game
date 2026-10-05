@@ -47,7 +47,7 @@ function ResultsPanel() {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-baseline gap-2.5">
-        <strong className="font-display text-4xl">{passed}/{ev.phases.length}</strong>
+        <strong className={cn('font-display text-4xl', passed === ev.phases.length ? 'text-ok [text-shadow:0_0_14px_var(--ok)]' : 'neon-text')}>{passed}/{ev.phases.length}</strong>
         <span className="text-muted">scenarios passed · ${fmt(ev.cost)}/month</span>
       </div>
       <EvalTable ev={ev} />
@@ -62,7 +62,7 @@ export function SidePanel() {
   const setTab = useSim((s) => s.setTab)
   const fails = useReview().filter((r) => r.lvl === 'fail').length
   return (
-    <aside className="grid min-h-0 grid-rows-[auto_1fr] border-l border-line bg-panel max-lg:border-l-0 max-lg:border-t">
+    <aside className="grid min-h-0 grid-rows-[auto_1fr] border-l border-line bg-glass backdrop-blur-md max-lg:border-l-0 max-lg:border-t">
       <Tabs value={tab} onValueChange={(v) => setTab(v as PanelTab)} className="contents">
         <TabsList>
           <TabsTrigger value="learn">Learn</TabsTrigger>

@@ -11,10 +11,10 @@ export function Tip({ content, children }: { content: ReactNode; children: React
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           sideOffset={6}
-          className="z-50 max-w-64 rounded-lg bg-ink px-3 py-2 text-[12.5px] leading-snug text-bg shadow-lg"
+          className="z-50 max-w-64 rounded-lg border border-accent/40 bg-panel px-3 py-2 text-[12.5px] leading-snug text-ink shadow-glow"
         >
           {content}
-          <TooltipPrimitive.Arrow className="fill-ink" />
+          <TooltipPrimitive.Arrow className="fill-accent/40" />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>

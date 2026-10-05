@@ -9,9 +9,24 @@ import { useSim } from '../../store/sim'
 function Tile({ label, value, tone, tip }: { label: string; value: ReactNode; tone?: 'good' | 'bad'; tip: string }) {
   return (
     <Tip content={tip}>
-      <div tabIndex={0} className="pointer-events-auto min-w-24 rounded-xl border border-line bg-panel px-2.5 py-1.5">
-        <span className="block whitespace-nowrap text-[10.5px] text-muted">{label}</span>
-        <strong className={cn('font-mono text-[15px] font-medium tabular-nums', tone === 'good' && 'text-ok', tone === 'bad' && 'text-bad')}>{value}</strong>
+      <div
+        tabIndex={0}
+        className={cn(
+          'pointer-events-auto min-w-26 rounded-xl border border-line bg-glass px-3 py-1.5 backdrop-blur-md',
+          tone === 'good' && 'border-ok/40 shadow-[0_0_16px_-8px_var(--ok)]',
+          tone === 'bad' && 'border-bad/50 shadow-[0_0_16px_-6px_var(--bad)]',
+        )}
+      >
+        <span className="block whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-muted">{label}</span>
+        <strong
+          className={cn(
+            'font-mono text-[17px] font-semibold tabular-nums',
+            tone === 'good' && 'text-ok [text-shadow:0_0_10px_var(--ok)]',
+            tone === 'bad' && 'text-bad [text-shadow:0_0_10px_var(--bad)]',
+          )}
+        >
+          {value}
+        </strong>
       </div>
     </Tip>
   )

@@ -27,6 +27,7 @@ export const DND_TYPE = 'application/x-system-component'
 export function Board() {
   const design = useGame((s) => s.design)
   const selection = useGame((s) => s.selection)
+  const running = useSim((s) => s.running)
   const { moveNode, removeNode, addEdge, removeEdge, select, addNode } = useGame.getState()
   const { screenToFlowPosition, fitView } = useReactFlow()
 
@@ -60,10 +61,11 @@ export function Board() {
         source: e.from,
         target: e.to,
         type: 'flow',
+        className: running ? 'live' : undefined,
         selected: selection?.kind === 'edge' && selection.from === e.from && selection.to === e.to,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: running ? 'var(--accent)' : 'var(--line2)' },
       })),
-    [design.edges, selection],
+    [design.edges, selection, running],
   )
 
   const onNodesChange = useCallback(
@@ -140,11 +142,15 @@ export function Board() {
       snapGrid={[10, 10]}
       deleteKeyCode={['Backspace', 'Delete']}
       proOptions={{ hideAttribution: true }}
+      className="board-bg"
       aria-label="Design board"
     >
-      <Background variant={BackgroundVariant.Dots} gap={22} size={1.6} />
+      <Background variant={BackgroundVariant.Lines} gap={28} lineWidth={1} color="var(--grid)" />
+      <Background id="major" variant={BackgroundVariant.Lines} gap={140} lineWidth={1} color="var(--line2)" style={{ opacity: 0.4 }} />
       <Controls showInteractive={false} position="top-right" />
-      {design.nodes.length > 5 && <MiniMap pannable zoomable position="bottom-right" className="!mb-20 max-sm:hidden" />}
+      {design.nodes.length > 5 && <MiniMap pannable zoomable position="bottom-right" style={{ width: 150, height: 96 }} className="!mb-20 max-sm:hidden"
+          maskColor="color-mix(in srgb, var(--bg) 75%, transparent)"
+          nodeColor="var(--line2)" />}
     </ReactFlow>
   )
 }

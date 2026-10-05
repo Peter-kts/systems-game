@@ -11,7 +11,7 @@ export function Page({ children }: { children: ReactNode }) {
 export function PageHeader({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
   return (
     <header className="grid gap-1.5">
-      <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-accent">{eyebrow}</span>
+      <span className="neon-text font-mono text-[11px] uppercase tracking-[0.12em]">{eyebrow}</span>
       <h2 className="text-[28px] font-bold leading-tight">{title}</h2>
       <p className="m-0 max-w-[65ch] text-muted">{lead}</p>
     </header>

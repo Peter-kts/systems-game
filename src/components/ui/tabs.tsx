@@ -13,7 +13,7 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
     <TabsPrimitive.Trigger
       className={cn(
         'flex flex-1 items-center justify-center gap-1.5 border-b-2 border-transparent px-2 py-2.5 font-medium text-muted cursor-pointer',
-        'data-[state=active]:border-accent data-[state=active]:text-ink',
+        'transition-colors hover:text-ink data-[state=active]:border-accent data-[state=active]:text-accent data-[state=active]:[text-shadow:0_0_10px_var(--accent)]',
         className,
       )}
       {...props}

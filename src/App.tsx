@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Cpu } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -40,10 +41,15 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="grid h-full min-h-0 grid-rows-[auto_1fr] max-lg:h-auto max-lg:min-h-full">
-        <header className="flex flex-wrap items-center gap-5 border-b border-line bg-panel px-4 py-2.5">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <h1 className="text-[19px] font-bold">System Design Lab</h1>
-            <span className="font-mono text-xs text-muted">Level 1 · {LEVEL.title}</span>
+        <header className="relative z-20 flex flex-wrap items-center gap-5 border-b border-line bg-glass px-4 py-2.5 backdrop-blur-md">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-lg border border-accent/50 bg-accent/10 text-accent shadow-glow">
+              <Cpu size={18} aria-hidden />
+            </span>
+            <h1 className="text-[19px] font-bold tracking-tight">
+              System Design <span className="neon-text">Lab</span>
+            </h1>
+            <span className="rounded-md border border-line2 px-2 py-0.5 font-mono text-[11px] text-muted">LVL 1 · {LEVEL.title}</span>
           </div>
           <nav aria-label="Steps" className="ml-auto flex flex-wrap gap-1 max-sm:ml-0">
             {STEPS.map((s, i) => (
@@ -52,14 +58,14 @@ export default function App() {
                 onClick={() => setStep(s.id)}
                 aria-current={step === s.id ? 'step' : undefined}
                 className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-full border border-transparent px-3 py-1.5 text-muted',
-                  step === s.id && 'border-soft bg-soft text-ink',
+                  'flex cursor-pointer items-center gap-2 rounded-full border border-transparent px-3 py-1.5 text-muted transition-colors hover:text-ink',
+                  step === s.id && 'border-accent/40 bg-accent/10 text-accent',
                 )}
               >
                 <b
                   className={cn(
                     'grid size-5 place-items-center rounded-full border border-line2 font-mono text-[11px] font-medium',
-                    step === s.id ? 'border-accent bg-accent text-accent-ink' : done[s.id] && 'border-ok text-ok',
+                    step === s.id ? 'border-accent bg-accent text-accent-ink shadow-glow' : done[s.id] && 'border-ok text-ok',
                   )}
                 >
                   {i + 1}
@@ -86,7 +92,10 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
-      <Toaster position="top-center" theme="system" toastOptions={{ className: 'font-sans' }} />
+      <Toaster position="top-center" theme="dark" toastOptions={{
+          className: 'font-sans',
+          style: { background: 'var(--panel)', color: 'var(--ink)', border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)', boxShadow: 'var(--glow)' },
+        }} />
     </TooltipProvider>
   )
 }

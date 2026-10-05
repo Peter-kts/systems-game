@@ -49,7 +49,7 @@ function Chart({
               labelFormatter={(v) => `${v} s`}
               formatter={(v) => [`${typeof v === 'number' ? (format ? format(v) : Math.round(v)) : v}${unit}`, title]}
             />
-            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -20,7 +20,7 @@ export function EstimateStep() {
       />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2.5">
         {LEVEL.facts.map(([k, v]) => (
-          <div key={k} className="rounded-xl border border-line bg-panel px-3 py-2.5">
+          <div key={k} className="rounded-xl border border-line bg-glass px-3 py-2.5">
             <span className="block text-xs text-muted">{k}</span>
             <strong className="font-mono text-[17px] font-medium">{v}</strong>
           </div>
@@ -34,7 +34,7 @@ export function EstimateStep() {
           const ok = inRange(e.id, e.lo, e.hi)
           const head = Number.isNaN(n) ? `Answer: ${e.answer}.` : ok ? `Close enough (${e.answer}).` : `Off. Expected ${e.answer}.`
           return (
-            <div key={e.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-panel p-3 max-sm:grid-cols-1">
+            <div key={e.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-glass p-3 max-sm:grid-cols-1">
               <label htmlFor={`est-${e.id}`} className="min-w-0">{e.question}</label>
               <span className="flex items-center gap-1.5">
                 <input
@@ -43,7 +43,7 @@ export function EstimateStep() {
                   value={raw}
                   placeholder="?"
                   onChange={(ev) => setEstimate(e.id, ev.target.value)}
-                  className="w-28 rounded-lg border border-line2 bg-bg px-2 py-1.5 font-mono text-ink"
+                  className="w-28 rounded-lg border border-line2 bg-bg px-2 py-1.5 font-mono text-accent outline-none transition-shadow focus:border-accent focus:shadow-glow"
                 />
                 <span className="min-w-16 text-xs text-muted">{e.unit}</span>
               </span>
