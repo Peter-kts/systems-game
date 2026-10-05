@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<title>System Design Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: whiteboard workbench. Steps across the top; in Build, palette | dotted board | inspector. */
+:root{
+  --bg:#EFF1EC; --panel:#FFFFFF; --ink:#1D2230; --muted:#5D6473; --line:#D8DCD3; --line2:#B9BFB4;
+  --grid:#C9CEC3; --node:#FFFFFF; --accent:#3443C4; --accent-ink:#FFFFFF; --soft:#E3E6F8;
+  --read:#3443C4; --write:#D0661C; --ok:#1C8749; --warn:#B07612; --bad:#C6352B;
+  --ok-soft:#DFF1E6; --warn-soft:#F6ECD6; --bad-soft:#F7E0DD;
+  --f-display:"Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#111419; --panel:#181C23; --ink:#E5E8EF; --muted:#9BA2B1; --line:#2A303A; --line2:#3D4451;
+  --grid:#2B313C; --node:#1E232C; --accent:#8D99FF; --accent-ink:#0E1120; --soft:#252B46;
+  --read:#8D99FF; --write:#F0A05A; --ok:#4FC283; --warn:#E2B443; --bad:#F2695C;
+  --ok-soft:#173326; --warn-soft:#352C14; --bad-soft:#3A1C19; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#111419; --panel:#181C23; --ink:#E5E8EF; --muted:#9BA2B1; --line:#2A303A; --line2:#3D4451;
+  --grid:#2B313C; --node:#1E232C; --accent:#8D99FF; --accent-ink:#0E1120; --soft:#252B46;
+  --read:#8D99FF; --write:#F0A05A; --ok:#4FC283; --warn:#E2B443; --bad:#F2695C;
+  --ok-soft:#173326; --warn-soft:#352C14; --bad-soft:#3A1C19; color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;text-wrap:balance;margin:0;letter-spacing:-.01em}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+#app{display:grid;grid-template-rows:auto 1fr;height:100%;min-height:0}
+.top{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-size:19px}
+.lvl{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.steps{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+.steps button{border:1px solid transparent;background:none;padding:6px 12px;border-radius:999px;cursor:pointer;color:var(--muted);display:flex;gap:7px;align-items:center}
+.steps button b{font-family:var(--f-mono);font-weight:500;font-size:11px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line2)}
+.steps button[aria-current="step"]{color:var(--ink);background:var(--soft);border-color:var(--soft)}
+.steps button[aria-current="step"] b{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.steps button.done b{border-color:var(--ok);color:var(--ok)}
+main{min-height:0;overflow:hidden}
+.step{height:100%;overflow:auto;padding-inline:16px;padding-block:24px 48px}
+.page{max-width:860px;margin:0 auto;display:grid;gap:20px}
+.page>header{display:grid;gap:6px}
+.page h2{font-size:28px}
+.lead{color:var(--muted);max-width:65ch;margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.prompt{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:grid;gap:8px}
+.prompt p{margin:0;max-width:65ch}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.fact span{display:block;font-size:12px;color:var(--muted)}
+.fact strong{font-family:var(--f-mono);font-weight:500;font-size:17px}
+.btn{border:1px solid var(--line2);background:var(--panel);padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.small{padding:4px 9px;font-size:12.5px}
+.btn.danger{color:var(--bad)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+/* requirements */
+.reqgroup{display:grid;gap:8px}
+.reqgroup h3{font-size:15px;font-family:var(--f-body);font-weight:600;color:var(--muted)}
+.req{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center}
+.req p{margin:0;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;padding:5px 10px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.verdict{grid-column:1/-1;font-size:13px;padding:8px 10px;border-radius:8px;display:none}
+.checked .verdict{display:block}
+.v-ok{background:var(--ok-soft)} .v-warn{background:var(--warn-soft)} .v-bad{background:var(--bad-soft)}
+.verdict b{font-weight:600}
+/* estimates */
+.est{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center}
+.est label{min-width:0}
+.est .inp{display:flex;align-items:center;gap:6px}
+.est input{width:110px;font-family:var(--f-mono);font-size:14px;padding:6px 8px;border:1px solid var(--line2);border-radius:7px;background:var(--bg);color:var(--ink)}
+.est .unit{font-size:12px;color:var(--muted);min-width:64px}
+.est .verdict{display:none}
+.est.checked .verdict{display:block}
+/* build */
+.build{display:grid;grid-template-columns:184px minmax(0,1fr) 340px;padding:0;overflow:hidden}
+.palette{border-right:1px solid var(--line);background:var(--panel);padding:12px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.palette h3,.side h3{font-family:var(--f-mono);font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pal-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--line);border-radius:9px;background:var(--node);cursor:grab;text-align:left;touch-action:manipulation;user-select:none}
+.pal-item:hover{border-color:var(--accent)}
+.pal-item svg{flex:none}
+.pal-item span{display:grid;line-height:1.2}
+.pal-item small{color:var(--muted);font-size:11px}
+.palnote{font-size:12px;color:var(--muted);margin:6px 0 0}
+.ico{fill:none;stroke:var(--accent);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.stage{display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0;position:relative}
+.simbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+.simbar .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0}
+.simbar label{font-size:12px;color:var(--muted)}
+.simbar input[type=range]{width:110px;accent-color:var(--accent)}
+.simbar .spacer{flex:1}
+.timeline{flex-basis:100%;min-width:0;max-width:100%;overflow:hidden;display:none;gap:2px;height:22px;position:relative;font-size:11px}
+.timeline.on{display:flex}
+.timeline .ph{flex:1;min-width:0;background:var(--soft);border-radius:4px;display:flex;align-items:center;padding:0 6px;overflow:hidden;white-space:nowrap;color:var(--muted)}
+.timeline .ph.pass{background:var(--ok-soft);color:var(--ok)} .timeline .ph.fail{background:var(--bad-soft);color:var(--bad)}
+.timeline .cursor{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);left:0}
+.boardwrap{position:relative;min-height:0;overflow:hidden}
+#board{width:100%;height:100%;display:block;touch-action:none;user-select:none}
+.gridbg{fill:url(#dots)}
+#dots circle{fill:var(--grid)}
+.edge{fill:none;stroke:var(--line2);stroke-width:2}
+.edge.sel{stroke:var(--accent);stroke-width:3}
+.ehit{fill:none;stroke:transparent;stroke-width:16;cursor:pointer}
+.arrow{fill:var(--line2)}
+.templine{stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;fill:none}
+.node{cursor:grab}
+.node .body{fill:var(--node);stroke:var(--line2);stroke-width:1.5}
+.node .stack{fill:var(--node);stroke:var(--line2);stroke-width:1}
+.node.sel .body{stroke:var(--accent);stroke-width:2.5}
+.node .nm{font:600 13px var(--f-body);fill:var(--ink)}
+.node .sb{font:400 10.5px var(--f-mono);fill:var(--muted)}
+.node .ubg{fill:var(--line)} .node .ub{fill:var(--ok)}
+.node .badge{font:500 10.5px var(--f-mono);fill:var(--muted)}
+.node .handle{fill:var(--panel);stroke:var(--accent);stroke-width:2;cursor:crosshair}
+.node .handle:hover{fill:var(--accent)}
+.node[data-st="warn"] .body{stroke:var(--warn);stroke-width:2.2} .node[data-st="warn"] .ub{fill:var(--warn)}
+.node[data-st="hot"] .body{stroke:var(--bad);stroke-width:2.6} .node[data-st="hot"] .ub{fill:var(--bad)} .node[data-st="hot"] .badge{fill:var(--bad)}
+.node[data-st="down"] .body{stroke:var(--bad);stroke-dasharray:5 4} .node[data-st="down"] .badge{fill:var(--bad)}
+.node[data-st="down"] .nm{fill:var(--muted)}
+.node.flash .body{fill:var(--bad-soft)}
+.pr{fill:var(--read)} .pw{fill:var(--write)} .pf{fill:var(--bad)}
+.hud{position:absolute;left:10px;right:10px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px;pointer-events:none}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:5px 10px;min-width:92px;pointer-events:auto}
+.tile span{display:block;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.tile strong{font-family:var(--f-mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
+.tile.good strong{color:var(--ok)} .tile.bad strong{color:var(--bad)}
+.hint{position:absolute;top:10px;left:10px;right:10px;font-size:12.5px;color:var(--muted);pointer-events:none;max-width:60ch}
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:9px;font-size:13px;max-width:min(520px,90%);opacity:0;transition:opacity .2s;pointer-events:none;z-index:5}
+.toast.on{opacity:1}
+.side{border-left:1px solid var(--line);background:var(--panel);display:grid;grid-template-rows:auto 1fr;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;background:none;padding:10px 6px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .count{font-family:var(--f-mono);font-size:11px;margin-left:4px;padding:0 5px;border-radius:999px;background:var(--bad-soft);color:var(--bad)}
+.tabs .count.zero{background:var(--ok-soft);color:var(--ok)}
+.pane{overflow:auto;padding:14px;display:grid;gap:14px;align-content:start;min-width:0}
+.card-h{display:flex;align-items:center;gap:10px}
+.card-h h2{font-size:20px;flex:1}
+.cfg{display:grid;gap:8px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.cfg .f{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cfg label{font-size:13px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--panel)}
+.stepper button{border:0;background:none;width:28px;height:28px;cursor:pointer;font-size:16px}
+.stepper output{min-width:30px;text-align:center;font-family:var(--f-mono)}
+.cfg select{font:inherit;font-family:var(--f-mono);padding:4px 6px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--ink)}
+.cfg .cost{font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between}
+.visual{background:var(--bg);border-radius:10px;padding:8px}
+.visual svg{width:100%;height:auto;display:block}
+.vb{fill:var(--node);stroke:var(--line2);stroke-width:1.2}
+.vt{font:500 10px var(--f-mono);fill:var(--ink)}
+.vc{font:400 10px var(--f-body);fill:var(--muted)}
+.vl{stroke:var(--line2);fill:none;stroke-width:1.2;stroke-dasharray:3 3}
+.vr{fill:var(--read)} .vw{fill:var(--write)} .vh{fill:var(--ok)}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);flex-wrap:wrap;margin-top:4px}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.learn{display:grid;gap:10px}
+.learn section h4{margin:0 0 2px;font-size:11px;font-family:var(--f-mono);font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.learn section p{margin:0}
+.learn .here{background:var(--soft);border-radius:9px;padding:9px 11px}
+.live{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.live .tile{min-width:0}
+.guide{display:grid;gap:6px}
+.guide button{display:flex;gap:10px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--node);padding:8px 10px;border-radius:9px;cursor:pointer}
+.guide button span{display:grid;line-height:1.3}
+.guide small{color:var(--muted)}
+.howto{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--muted);font-size:13px}
+.rule{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:9px 11px;border-radius:9px;border:1px solid var(--line)}
+.rule .mk{grid-row:span 2;min-width:42px;text-align:center;font-family:var(--f-mono);font-size:11px;font-weight:500;padding:1px 6px;border-radius:5px;height:fit-content;margin-top:2px}
+.rule b{font-weight:600}
+.rule p{margin:0;font-size:13px;color:var(--muted)}
+.rule.fail .mk{background:var(--bad-soft);color:var(--bad)} .rule.warn .mk{background:var(--warn-soft);color:var(--warn)}
+.rule.pass .mk{background:var(--ok-soft);color:var(--ok)} .rule.info .mk{background:var(--soft);color:var(--accent)}
+table.res{border-collapse:collapse;width:100%;font-size:13px}
+table.res th,table.res td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.res th{font-weight:500;color:var(--muted);font-size:12px}
+table.res td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ok{color:var(--ok)} .bad{color:var(--bad)} .mutedtxt{color:var(--muted)}
+.tablewrap{overflow-x:auto}
+.score{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.score strong{font-family:var(--f-display);font-size:34px}
+.tp{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.tp article{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tp h3{font-size:15px;margin-bottom:4px}
+.tp p{margin:0;font-size:13.5px;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;min-width:0}
+.ghost{position:fixed;pointer-events:none;z-index:50;opacity:.85;transform:translate(-50%,-50%)}
+@media (max-width: 900px){
+  #app{height:auto;min-height:100%}
+  main{overflow:visible}
+  .step{height:auto;overflow:visible}
+  .build{grid-template-columns:minmax(0,1fr);height:auto}
+  .palette{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:10px 16px}
+  .palette h3,.palnote{display:none}
+  .pal-item{flex:none}
+  .pal-item small{display:none}
+  .stage{height:auto}
+  .boardwrap{height:auto;aspect-ratio:1100/640;max-width:100%}
+  .side{border-left:0;border-top:1px solid var(--line)}
+  .hud .tile{min-width:76px}
+}
+@media (max-width: 520px){
+  .req,.est{grid-template-columns:minmax(0,1fr)}
+  .steps{margin-left:0}
+  .steps button span{display:none}
+}
+@media (prefers-reduced-motion: reduce){ .toast{transition:none} }
+</style>
+
+<div id="app">
+  <div class="top">
+    <div class="brand"><h1>System Design Lab</h1><span class="lvl">Level 1 · URL shortener</span></div>
+    <nav class="steps" aria-label="Steps">
+      <button data-step="req"><b>1</b><span>Scope</span></button>
+      <button data-step="est"><b>2</b><span>Estimate</span></button>
+      <button data-step="build"><b>3</b><span>Build &amp; test</span></button>
+      <button data-step="debrief"><b>4</b><span>Debrief</span></button>
+    </nav>
+  </div>
+  <main>
+    <!-- 1. Requirements -->
+    <section class="step" id="step-req" hidden>
+      <div class="page">
+        <header>
+          <span class="eyebrow">Step 1 · Clarify requirements</span>
+          <h2>"Design a URL shortener like bit.ly"</h2>
+          <p class="lead">Interviews start vague on purpose. Spend the first five minutes deciding what's in scope. Sort each statement, then check your answers.</p>
+        </header>
+        <div class="prompt">
+          <p><b>The interviewer says:</b> Users paste a long URL and get back a short one like <span class="num">sho.rt/a9Xk2Qp</span>. Anyone who opens the short link is sent to the original page. Assume it's popular.</p>
+        </div>
+        <div id="reqlist" class="reqgroup"></div>
+        <div class="row"><button class="btn primary" id="reqCheck">Check my scope</button><span id="reqScore" class="mutedtxt"></span><span class="spacer"></span><button class="btn" data-go="est">Next: estimate</button></div>
+      </div>
+    </section>
+
+    <!-- 2. Estimates -->
+    <section class="step" id="step-est" hidden>
+      <div class="page">
+        <header>
+          <span class="eyebrow">Step 2 · Back-of-envelope estimates</span>
+          <h2>How big is this thing?</h2>
+          <p class="lead">Rough numbers decide the design: they tell you whether one database is enough, whether you need a cache, and how big it should be. Round freely; interviewers want the right order of magnitude.</p>
+        </header>
+        <div class="facts">
+          <div class="fact"><span>New links per month</span><strong>100 million</strong></div>
+          <div class="fact"><span>Clicks per new link</span><strong>100 : 1</strong></div>
+          <div class="fact"><span>Keep links for</span><strong>5 years</strong></div>
+          <div class="fact"><span>Size of one record</span><strong>~500 bytes</strong></div>
+        </div>
+        <p class="lead" style="font-size:13px">Handy: one month ≈ 2.6 million seconds. 62 characters (a–z, A–Z, 0–9) per code position.</p>
+        <div id="estlist" class="reqgroup"></div>
+        <div class="row"><button class="btn primary" id="estCheck">Check my numbers</button><span id="estScore" class="mutedtxt"></span><span class="spacer"></span><button class="btn" data-go="build">Next: build it</button></div>
+      </div>
+    </section>
+
+    <!-- 3. Build & test -->
+    <section class="step build" id="step-build" hidden>
+      <aside class="palette" aria-label="Components">
+        <h3>Components</h3>
+        <div id="palette" style="display:contents"></div>
+        <p class="palnote">Drag onto the board or click to add. Drag from a node's right-hand dot to another node to connect them.</p>
+      </aside>
+      <div class="stage">
+        <div class="simbar">
+          <div class="grp"><button class="btn primary small" id="runBtn">▶ Run</button><button class="btn small" id="resetBtn">Reset</button></div>
+          <div class="grp"><label for="traffic">Traffic</label><input type="range" id="traffic" min="1" max="6" step="1" value="1"><span class="num" id="trafficLbl" style="font-size:12px">4,000 clicks/s</span></div>
+          <div class="grp"><label>Speed</label><button class="btn small" id="speedBtn">1×</button></div>
+          <div class="grp"><label>Break</label><button class="btn small danger" data-kill="app">App server</button><button class="btn small danger" data-kill="db">Database</button><button class="btn small danger" data-kill="cache">Cache</button></div>
+          <span class="spacer"></span>
+          <button class="btn primary small" id="evalBtn">Run evaluation</button>
+          <div class="timeline" id="timeline"></div>
+        </div>
+        <div class="boardwrap" id="boardwrap">
+          <svg id="board" viewBox="0 0 1100 620" preserveAspectRatio="xMidYMid meet" aria-label="Design board">
+            <defs>
+              <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.3"/></pattern>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
+            </defs>
+            <rect class="gridbg" x="-2000" y="-2000" width="5000" height="5000"/>
+            <g id="gEdges"></g>
+            <path id="tempLine" class="templine" d="" />
+            <g id="gNodes"></g>
+            <g id="gParts"></g>
+          </svg>
+          <div class="hint" id="hint"></div>
+          <div class="toast" id="toast" role="status" aria-live="polite"></div>
+          <div class="hud" id="hud"></div>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="inspect" aria-selected="true">Learn</button>
+          <button role="tab" data-tab="review">Review <span class="count" id="reviewCount">0</span></button>
+          <button role="tab" data-tab="results">Results</button>
+        </div>
+        <div class="pane" id="pane"></div>
+      </aside>
+    </section>
+
+    <!-- 4. Debrief -->
+    <section class="step" id="step-debrief" hidden>
+      <div class="page" id="debrief"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const W=184,H=60, BASE_R=4000, BASE_W=40, BUDGET=3000;
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- icons ---------- */
+const ICON={
+  client:'<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M10.5 18.5h3"/>',
+  cdn:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3 3.2 15 0 18M12 3c-3.2 3-3.2 15 0 18"/>',
+  lb:'<circle cx="4.5" cy="12" r="2"/><path d="M6.5 12h4.5M11 12l6.5-6.5M11 12h6.5M11 12l6.5 6.5"/><circle cx="19.5" cy="5.5" r="1.6"/><circle cx="19.5" cy="12" r="1.6"/><circle cx="19.5" cy="18.5" r="1.6"/>',
+  app:'<rect x="3.5" y="4" width="17" height="7" rx="1.5"/><rect x="3.5" y="13" width="17" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6"/>',
+  cache:'<path d="M13 2.5L5 13.5h6l-1 8 8-11.5h-6z"/>',
+  sql:'<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  nosql:'<circle cx="12" cy="4.5" r="2.3"/><circle cx="4.8" cy="16.5" r="2.3"/><circle cx="19.2" cy="16.5" r="2.3"/><path d="M10.6 6.4L6 14.5M13.4 6.4l4.6 8.1M7.1 16.5h9.8"/>',
+  kgs:'<circle cx="7.5" cy="12" r="4.5"/><path d="M12 12h9.5M18.5 12v3.5M21.5 12v2.5"/>',
+  queue:'<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M7 7v10M12 7v10M17 7v10"/>',
+  worker:'<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5M5.3 5.3l2.5 2.5M16.2 16.2l2.5 2.5M5.3 18.7l2.5-2.5M16.2 7.8l2.5-2.5"/>'
+};
+const icon=(t,s=22)=>`<svg class="ico" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${ICON[t]}</svg>`;
+
+/* ---------- mini visuals ---------- */
+const vbox=(x,y,w,h,t)=>`<rect class="vb" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><text class="vt" x="${x+w/2}" y="${y+h/2+3.5}" text-anchor="middle">${t}</text>`;
+const vcyl=(x,y,w,h,t)=>`<path class="vb" d="M${x} ${y+5}v${h-10}a${w/2} 5 0 0 0 ${w} 0v${-(h-10)}a${w/2} 5 0 0 0 ${-w} 0a${w/2} 5 0 0 0 ${w} 0"/><text class="vt" x="${x+w/2}" y="${y+h/2+7}" text-anchor="middle">${t}</text>`;
+const vl=d=>`<path class="vl" d="${d}"/>`;
+const dot=(p,dur,b,c='vr',r=3.5)=>`<circle r="${r}" class="${c}"><animateMotion dur="${dur}s" begin="${b}s" repeatCount="indefinite" path="${p}"/></circle>`;
+const cap=t=>`<text class="vc" x="130" y="112" text-anchor="middle">${t}</text>`;
+const VIS={
+  client: vbox(10,40,56,28,'Users')+vbox(190,40,62,28,'Service')+vl('M66 54H190')+dot('M66 50H190',1.6,0)+dot('M66 50H190',1.6,-.55)+dot('M66 50H190',1.6,-1.1)+dot('M66 59H190',1.6,-.8,'vw')+cap('Every request starts with a user'),
+  cdn: vbox(6,42,46,26,'User')+vbox(100,42,52,26,'Edge')+vbox(200,42,54,26,'Origin')+vl('M52 55H100')+vl('M152 55H200')+dot('M52 51L100 51L52 51',1.3,0,'vh')+dot('M52 51L100 51L52 51',1.3,-.65,'vh')+dot('M52 59L200 59L52 59',2.6,-1.2)+cap('Popular answers served near the user'),
+  lb: vbox(4,42,44,26,'Users')+vbox(80,42,40,26,'LB')+vbox(188,8,64,24,'App')+vbox(188,43,64,24,'App')+vbox(188,78,64,24,'App')+vl('M48 55H80')+vl('M120 55L188 20M120 55H188M120 55L188 90')+dot('M48 55L120 55L188 20',1.8,0)+dot('M48 55L120 55L188 55',1.8,-.6)+dot('M48 55L120 55L188 90',1.8,-1.2)+cap('One address, many servers'),
+  app: vbox(4,42,40,26,'LB')+vbox(100,8,64,24,'App')+vbox(100,43,64,24,'App')+vbox(100,78,64,24,'App')+vcyl(206,34,46,42,'DB')+vl('M44 55L100 20M44 55H100M44 55L100 90M164 20L206 50M164 55H206M164 90L206 62')+dot('M44 55L100 20L164 20L206 50',2.2,0)+dot('M44 55L100 55L164 55L206 55',2.2,-.75)+dot('M44 55L100 90L164 90L206 62',2.2,-1.5)+cap('Stateless: any instance can serve any request'),
+  cache: vbox(6,42,44,26,'App')+vbox(110,8,64,26,'Cache')+vcyl(204,54,48,44,'DB')+vl('M50 50L110 21')+vl('M50 62L204 78')+dot('M50 50L110 21L50 50',1.1,0,'vh')+dot('M50 50L110 21L50 50',1.1,-.37,'vh')+dot('M50 50L110 21L50 50',1.1,-.74,'vh')+dot('M50 62L204 78L50 62',2.4,-1.2)+cap('Hit: under 1 ms · Miss: go to the database'),
+  sql: vcyl(16,32,64,50,'Primary')+vcyl(180,4,64,44,'Replica')+vcyl(180,58,64,44,'Replica')+vl('M80 46L180 26M80 66L180 80')+dot('M0 57L16 57',1,0,'vw')+dot('M80 46L180 26',1.6,-.2,'vw')+dot('M80 66L180 80',1.6,-.2,'vw')+dot('M262 26L244 26',1.2,-.5)+dot('M262 80L244 80',1.2,-.9)+cap('Writes to the primary, copies to replicas'),
+  nosql: vbox(4,42,62,26,'hash(key)')+'<circle class="vb" cx="180" cy="55" r="40" style="fill:none"/>'+[0,1,2,3,4,5].map(i=>{const a=i*Math.PI/3-Math.PI/2;return `<circle class="vb" cx="${180+40*Math.cos(a)}" cy="${55+40*Math.sin(a)}" r="9"/>`}).join('')+vl('M66 55L145 35')+dot('M66 55L145 35',1.6,0,'vw')+dot('M145 35L180 15',1.6,-.8,'vw',3)+dot('M145 35L145 75',1.6,-.8,'vw',3)+cap('Each key lives on 3 of the nodes'),
+  kgs: '<rect class="vb" x="8" y="18" width="104" height="76" rx="6"/>'+['a9Xk2Qp','Zr41mQe','7bTt0Lw','Pq3vY8n'].map((k,i)=>`<text class="vt" x="60" y="${36+i*16}" text-anchor="middle">${k}</text>`).join('')+vbox(190,42,62,26,'App')+vl('M112 55H190')+dot('M112 55H190',1.4,0)+dot('M112 55H190',1.4,-.7)+cap('Codes made ahead of time: no collision check'),
+  queue: vbox(4,42,40,26,'App')+'<rect class="vb" x="62" y="42" width="124" height="26" rx="4"/>'+[93,124,155].map(x=>`<path class="vl" d="M${x} 42v26"/>`).join('')+vbox(202,42,52,26,'Worker')+[0,-.5,-1,-1.5,-2,-2.5,-3,-3.5].map(b=>dot('M44 55H202',4,b,'vr',3)).join('')+cap('Producers drop messages and move on'),
+  worker: vbox(4,42,56,26,'Queue')+vbox(98,42,58,26,'Worker')+vcyl(204,32,48,44,'DB')+vl('M60 55H98M156 55H204')+[0,-.2,-.4].map(b=>dot('M60 55H98',.6,b,'vr',2.5)).join('')+dot('M156 55H204',2.4,0,'vr',6)+cap('Many events in, one batched write out')
+};
+const visual=t=>`<svg viewBox="0 0 260 120" role="img" aria-label="Animation of what the ${CAT[t].name} does">${VIS[t]}</svg>`;
+
+/* ---------- component catalog ---------- */
+const CACHE_HIT={32:.75,64:.85,128:.92,256:.95}, CACHE_COST={32:100,64:180,128:330,256:600};
+const CAT={
+  client:{name:'Users',tag:'Where requests come from',fixed:true,cfg:[],cost:()=>0,count:()=>1,
+    sub:()=>'clicks + new links',
+    what:'Browsers and phone apps. They create short links (writes) and click them (reads). Arrows on the board show which way requests travel.',
+    when:'Always the starting point of a design.',
+    watch:'Users are far from your servers. Each internet round trip costs about 40 ms in this game, or about 10 ms if a nearby CDN edge answers.',
+    nums:'Normal day: ~4,000 clicks/s and ~40 new links/s. Viral moments: 5× that.',
+    here:'Connect Users to whatever receives traffic first: a CDN, a load balancer, or (for a toy design) a single app server.'},
+  cdn:{name:'CDN',tag:'Edge cache near users',cfg:[],cost:()=>150,count:()=>1,
+    sub:()=>'answers ~60% of clicks',
+    what:'A network of edge servers around the world that keep copies of responses close to users. A cached redirect is answered at the edge and never reaches your servers.',
+    when:'Static files, images, video, and any response many users ask for. For a shortener, popular redirects can be cached at the edge.',
+    watch:'If the edge serves a cached 301 (permanent) redirect, your servers never see the click, so click analytics break. Teams use 302 redirects with a short cache time, or collect the CDN\'s logs. Writes always pass through.',
+    nums:'Edge round trip ~10 ms vs ~40 ms to your data center. About 60% of clicks hit the edge here. $150/month.',
+    here:'Optional. It removes a lot of load from your servers, but it conflicts with click tracking.'},
+  lb:{name:'Load balancer',tag:'Spreads traffic',cfg:[],cost:()=>25,count:()=>1,
+    sub:()=>'managed · least busy',
+    what:'One public address that spreads incoming requests across many app servers and stops sending to servers that fail health checks.',
+    when:'As soon as you have more than one app server, which in production is always.',
+    watch:'A load balancer can itself be a single point of failure. Cloud load balancers like this one are managed and replicated for you; say so in the interview. Common algorithms: round robin, least connections, consistent hashing.',
+    nums:'Hundreds of thousands of requests/s, adds under 1 ms. $25/month.',
+    here:'Put it between Users (or the CDN) and your app servers. This one sends each request to the least busy app server.'},
+  app:{name:'App server',tag:'Runs your code',cfg:[{k:'inst',label:'Instances',min:1,max:12,def:2}],cost:c=>60*c.inst,count:c=>c.inst,
+    sub:c=>`${c.inst} instance${c.inst>1?'s':''}`,
+    what:'Runs your code: validates input, gets a short code, talks to the cache and database, and returns the redirect. Each instance has 16 worker threads, and a thread stays busy while it waits on the cache or database.',
+    when:'Every design needs one. Keep app servers stateless (nothing stored on the machine) so you can add or remove instances freely.',
+    watch:'If the database slows down, threads pile up waiting, the app runs out of threads, and requests fail even though the app itself is fine. That is a cascading failure. A single instance is a single point of failure.',
+    nums:'~3 ms of work per request. One instance handles roughly 3,000–4,000 requests/s here. $60/month each.',
+    here:'Size for the 5× spike, not the average. Connect it to a cache, a database and, optionally, a key generator.'},
+  cache:{name:'Cache',tag:'In-memory, Redis',cfg:[{k:'size',label:'Memory',opts:[32,64,128,256],unit:'GB',def:64},{k:'rep',label:'Replicas',min:0,max:2,def:0}],cost:c=>CACHE_COST[c.size]*(1+c.rep),count:c=>1+c.rep,
+    sub:c=>`${c.size} GB · ${c.rep} replica${c.rep===1?'':'s'}`,
+    what:'An in-memory key-value store. The app checks the cache first. On a hit it answers in under a millisecond; on a miss it reads the database and stores the answer for next time. This pattern is called cache-aside.',
+    when:'Read-heavy workloads where the same items are read again and again. Redirects are a perfect fit.',
+    watch:'Hit rate depends on memory: too small and popular links get evicted (LRU). If a cache node dies with no replica, every request falls through to the database at once. A restarted cache is empty ("cold") and takes time to warm up.',
+    nums:'~0.15 ms per lookup, ~50,000 ops/s per node. Hit rate here: 32 GB 75%, 64 GB 85%, 128 GB 92%, 256 GB 95%.',
+    here:'Your hot-data estimate (~120 GB) tells you the size. A replica means a node failure doesn\'t wipe the cache.'},
+  sql:{name:'SQL database',tag:'Relational, Postgres',cfg:[{k:'shards',label:'Shards',min:1,max:8,def:1},{k:'rep',label:'Replicas per shard',min:0,max:3,def:0}],cost:c=>300*c.shards*(1+c.rep),count:c=>c.shards*(1+c.rep),
+    sub:c=>`${c.shards} shard${c.shards>1?'s':''} · ${c.rep} replica${c.rep===1?'':'s'}`,
+    what:'A relational database (PostgreSQL, MySQL) with tables, transactions and strong consistency. A primary takes writes; read replicas copy it and serve reads. Sharding splits rows across several primaries by key.',
+    when:'Structured data with relationships, transactions, or strict consistency needs. It also works fine for a shortener: the data is one simple table.',
+    watch:'Writes only go to the primary. If it dies, writes fail until a replica is promoted (~3 s here). With no replicas, that shard\'s data is gone until repair. Each machine holds 2 TB, so big datasets need shards.',
+    nums:'Reads ~8 ms, ~2,000/s per machine. Writes ~15 ms, ~500/s per primary. $300/month per machine.',
+    here:'3 TB of links won\'t fit on one machine. Shard by short code and give each shard a replica.'},
+  nosql:{name:'NoSQL store',tag:'Key-value, Cassandra',cfg:[{k:'n',label:'Nodes',min:1,max:12,def:3}],cost:c=>250*c.n,count:c=>c.n,
+    sub:c=>`${c.n} node${c.n>1?'s':''} · ${Math.min(3,c.n)} copies`,
+    what:'A distributed key-value or wide-column store (Cassandra, DynamoDB). Keys are hashed to spread data across nodes, and each item is copied to several nodes (3 here).',
+    when:'Huge datasets read by key, high write volume, and when brief staleness is acceptable. Looking up a link by its code is exactly this.',
+    watch:'No joins and limited transactions. Reads can briefly see old data (eventual consistency). Fewer than 3 nodes means a single failure can lose data or availability.',
+    nums:'Reads ~5 ms, writes ~7 ms, ~3,000 ops/s per node. Usable storage = nodes × 2 TB ÷ 3 copies. $250/month per node.',
+    here:'Scales by adding nodes, and a dead node is handled with no failover pause.'},
+  kgs:{name:'Key generator',tag:'Pre-made short codes',cfg:[{k:'inst',label:'Instances',min:1,max:3,def:1}],cost:c=>40*c.inst,count:c=>c.inst,
+    sub:c=>`${c.inst} instance${c.inst>1?'s':''}`,
+    what:'A small service that generates unique short codes ahead of time and hands them out. The app asks for a code instead of computing one.',
+    when:'Whenever you need unique IDs at scale without coordination: short codes, order numbers, Snowflake-style IDs.',
+    watch:'Without it, the app hashes the URL (or picks random characters) and must check the database for a collision before every write: one extra read per write. Two instances must never hand out the same code, so each reserves its own batch.',
+    nums:'~0.5 ms per code. $40/month per instance.',
+    here:'Optional, but a classic talking point: hashing vs. counters vs. a key service.'},
+  queue:{name:'Message queue',tag:'Async buffer, Kafka',cfg:[],cost:()=>80,count:()=>1,
+    sub:()=>'async buffer',
+    what:'A durable buffer (Kafka, SQS). Producers drop messages in and move on; consumers process them later at their own pace.',
+    when:'Work that doesn\'t need to finish before you reply: analytics, emails, thumbnails. It also soaks up bursts.',
+    watch:'Something has to consume the messages. If workers are slower than producers, the backlog grows without limit.',
+    nums:'Millisecond publishes, millions of messages/s. $80/month.',
+    here:'For click analytics: each redirect publishes a click event without slowing the redirect down. Pair it with workers.'},
+  worker:{name:'Worker',tag:'Background jobs',cfg:[{k:'inst',label:'Instances',min:1,max:6,def:1}],cost:c=>60*c.inst,count:c=>c.inst,
+    sub:c=>`${c.inst} instance${c.inst>1?'s':''}`,
+    what:'Background processes that read from a queue and do the slow work, such as adding up click counts and writing them to a database in batches.',
+    when:'Any asynchronous job pipeline.',
+    watch:'Scale workers so the queue backlog stays near zero. Batching writes keeps database load low.',
+    nums:'~2,000 events/s per instance here. $60/month each.',
+    here:'Only useful if click analytics are in scope.'}
+};
+const ORDER=['cdn','lb','app','cache','sql','nosql','kgs','queue','worker'];
+const ALLOW={client:['cdn','lb','app'],cdn:['lb','app'],lb:['app'],app:['cache','sql','nosql','kgs','queue'],queue:['worker'],worker:['sql','nosql'],cache:[],sql:[],nosql:[],kgs:[]};
+const COLX={client:20,cdn:230,lb:230,app:440,cache:660,kgs:660,queue:660,sql:890,nosql:890,worker:890};
+
+function edgeWhy(a,b){
+  const A=CAT[a].name,B=CAT[b].name, store=['sql','nosql','cache'];
+  if(a==='client'&&store.includes(b))return 'Users never talk to a datastore directly: it would expose credentials and skip validation. Route through an app server.';
+  if(a==='lb'&&store.includes(b))return 'A load balancer only spreads web traffic across app servers. It doesn\'t speak database protocols.';
+  if(a==='cache'&&(b==='sql'||b==='nosql'))return 'This game uses cache-aside: the app checks the cache, and on a miss reads the database itself. Connect the app to both.';
+  if(['sql','nosql','cache','kgs'].includes(a))return `${A} only answers requests; it doesn't call other components. Draw arrows from the caller to the callee.`;
+  if(a==='app'&&b==='app')return 'App servers are stateless and don\'t call each other. Add instances on one App server instead.';
+  if(b==='client')return 'Arrows point the way requests travel, starting from Users.';
+  if(a==='app'&&(b==='lb'||b==='cdn'))return 'Arrows point the way requests travel: Users → CDN → Load balancer → App server.';
+  const ok=ALLOW[a].map(t=>CAT[t].name);
+  return `${A} doesn't send requests to ${B}. It can connect to: ${ok.join(', ')||'nothing'}.`;
+}
+
+/* ---------- design state ---------- */
+let seq=10;
+const STARTER=()=>({nodes:[{id:'client',type:'client',x:20,y:280,cfg:{}},{id:'n1',type:'app',x:440,y:280,cfg:{inst:1}},{id:'n2',type:'sql',x:890,y:280,cfg:{shards:1,rep:0}}],edges:[{from:'client',to:'n1'},{from:'n1',to:'n2'}]});
+const REFERENCE=()=>({nodes:[{id:'client',type:'client',x:20,y:280,cfg:{}},{id:'r1',type:'lb',x:230,y:280,cfg:{}},{id:'r2',type:'app',x:440,y:280,cfg:{inst:6}},{id:'r3',type:'cache',x:660,y:150,cfg:{size:128,rep:1}},{id:'r4',type:'kgs',x:660,y:420,cfg:{inst:2}},{id:'r5',type:'nosql',x:890,y:280,cfg:{n:5}}],edges:[{from:'client',to:'r1'},{from:'r1',to:'r2'},{from:'r2',to:'r3'},{from:'r2',to:'r5'},{from:'r2',to:'r4'}]});
+let st={step:'req',design:STARTER(),req:{},reqChecked:false,est:{},estChecked:false,lastEval:null,saved:null};
+try{const s=JSON.parse(localStorage.getItem('sdl-url-v1')||'null'); if(s&&s.design)st=Object.assign(st,s);}catch(e){}
+st.design.nodes.forEach(n=>{const m=/\d+/.exec(n.id); if(m)seq=Math.max(seq,+m[0]+1)});
+const save=()=>{try{localStorage.setItem('sdl-url-v1',JSON.stringify(st))}catch(e){}};
+const D=()=>st.design;
+const byId=id=>D().nodes.find(n=>n.id===id);
+const typeOf=id=>byId(id)?.type;
+const totalCost=()=>D().nodes.reduce((s,n)=>s+CAT[n.type].cost(n.cfg),0);
+
+/* ---------- steps ---------- */
+function goStep(s){
+  st.step=s; save();
+  $$('.step').forEach(el=>el.hidden=el.id!=='step-'+s);
+  $$('.steps button').forEach(b=>{b.toggleAttribute('aria-current',false); if(b.dataset.step===s)b.setAttribute('aria-current','step')});
+  $('.steps [data-step=req]').classList.toggle('done',st.reqChecked);
+  $('.steps [data-step=est]').classList.toggle('done',st.estChecked);
+  $('.steps [data-step=build]').classList.toggle('done',!!st.lastEval);
+  if(s==='build')renderBoard();
+  if(s==='debrief')renderDebrief();
+}
+$$('.steps button').forEach(b=>b.onclick=()=>goStep(b.dataset.step));
+$$('[data-go]').forEach(b=>b.onclick=()=>goStep(b.dataset.go));
+
+/* ---------- requirements ---------- */
+const REQS=[
+  {id:'shorten',g:'Functional',t:'Given a long URL, return a short, unique link.',a:'must',ok:['must'],why:'This is the product. Together with redirects it defines the API: POST /urls and GET /{code}.'},
+  {id:'redirect',g:'Functional',t:'Opening a short link redirects to the original URL.',a:'must',ok:['must'],why:'Redirects are about 99% of traffic, so they drive the whole design.'},
+  {id:'alias',g:'Functional',t:'Users can pick a custom alias, like sho.rt/my-party.',a:'nice',ok:['nice','out'],why:'A common follow-up. Mention it and confirm with the interviewer before designing for it. It adds a uniqueness check on writes.'},
+  {id:'expiry',g:'Functional',t:'Links can expire after a chosen time.',a:'nice',ok:['nice','out'],why:'Cheap to support with an expiry column and a cleanup job, and it caps storage growth.'},
+  {id:'analytics',g:'Functional',t:'Track how many times each link is clicked.',a:'nice',ok:['nice','must'],why:'Interviewers often add this later. It pushes you toward logging clicks asynchronously (queue + workers) so redirects stay fast, and it conflicts with caching redirects at a CDN.'},
+  {id:'edit',g:'Functional',t:'Users can change where an existing short link points.',a:'out',ok:['out'],why:'Mutable links break caching everywhere and enable bait-and-switch abuse. Most real shorteners make links immutable.'},
+  {id:'search',g:'Functional',t:'Full-text search across every URL ever shortened.',a:'out',ok:['out'],why:'Needs a search index and has nothing to do with shortening. Scope it out explicitly.'},
+  {id:'latency',g:'Non-functional',t:'Redirects are fast: 99% finish in under 100 ms.',a:'must',ok:['must'],why:'A redirect sits in front of every click, so users feel any delay. The simulation grades p99 click latency against 100 ms.'},
+  {id:'avail',g:'Non-functional',t:'Highly available: redirects keep working when a machine dies.',a:'must',ok:['must'],why:'If the shortener is down, every link anyone ever shared is broken. Here availability matters more than consistency.'},
+  {id:'guess',g:'Non-functional',t:'Short codes are hard to guess (not sequential).',a:'nice',ok:['nice','must'],why:'Sequential codes let anyone enumerate every link. Random or scrambled codes avoid that.'},
+  {id:'consistency',g:'Non-functional',t:'A new link must work worldwide the instant it\'s created.',a:'out',ok:['out'],why:'A link becoming visible a second later is fine. Strong global consistency would cost latency and availability (the CAP trade-off) for no user benefit.'},
+  {id:'readheavy',g:'Non-functional',t:'Assume about 100 clicks for every new link.',a:'must',ok:['must','nice'],why:'Say this assumption out loud: it justifies caching and read replicas.'}
+];
+const LBL={must:'Must have',nice:'Nice to have',out:'Out of scope'};
+function renderReqs(){
+  const groups={};
+  REQS.forEach(r=>(groups[r.g]=groups[r.g]||[]).push(r));
+  $('#reqlist').innerHTML=Object.entries(groups).map(([g,rs])=>`<h3>${g}</h3>`+rs.map(r=>{
+    const v=st.req[r.id], cls=!st.reqChecked?'':(!v?'v-warn':r.ok.includes(v)?'v-ok':'v-bad');
+    const head=!v?'Not answered.':r.ok.includes(v)?(v===r.a?'Right.':`Fine. Most interviewers would call it ${LBL[r.a].toLowerCase()}.`):`Usually ${LBL[r.a].toLowerCase()}.`;
+    return `<div class="req ${st.reqChecked?'checked':''}" data-id="${r.id}"><p>${r.t}</p><div class="seg" role="group" aria-label="Scope">${['must','nice','out'].map(k=>`<button data-v="${k}" aria-pressed="${v===k}">${LBL[k]}</button>`).join('')}</div><div class="verdict ${cls}"><b>${head}</b> ${r.why}</div></div>`;
+  }).join('')).join('');
+  $$('#reqlist .seg button').forEach(b=>b.onclick=()=>{const id=b.closest('.req').dataset.id; st.req[id]=b.dataset.v; save(); renderReqs();});
+  if(st.reqChecked){const good=REQS.filter(r=>r.ok.includes(st.req[r.id])).length; $('#reqScore').textContent=`${good} of ${REQS.length} sorted sensibly.`;}
+}
+$('#reqCheck').onclick=()=>{st.reqChecked=true; save(); renderReqs(); goStep('req');};
+const analyticsScope=()=>st.req.analytics||'nice';
+
+/* ---------- estimates ---------- */
+const ESTS=[
+  {id:'wps',q:'Average new links per second',unit:'writes/s',lo:25,hi:60,ans:'~40',work:'100M ÷ 2.6M seconds ≈ 38, call it 40 writes/s.'},
+  {id:'rps',q:'Average clicks per second',unit:'reads/s',lo:2500,hi:6000,ans:'~4,000',work:'40 writes/s × 100 = ~4,000 reads/s. Peaks run 5–10× higher, so the evaluation throws a 5× spike at you.'},
+  {id:'links',q:'Links stored after 5 years',unit:'billion',lo:4,hi:8,ans:'6 billion',work:'100M × 12 months × 5 years = 6 billion links.'},
+  {id:'tb',q:'Storage needed for those links',unit:'TB',lo:2,hi:5,ans:'~3 TB',work:'6B × 500 bytes = 3 TB before replication (~9 TB with 3 copies). One database machine here holds 2 TB, so you need sharding or a distributed store.'},
+  {id:'len',q:'Characters in a base62 short code',unit:'chars',lo:6,hi:7,ans:'7',work:'62⁶ ≈ 57 billion and 62⁷ ≈ 3.5 trillion. Six characters covers 6B links; seven adds headroom and keeps random codes sparse so collisions stay rare.'},
+  {id:'cache',q:'Cache memory for the hot links',unit:'GB',lo:60,hi:250,ans:'~120 GB',work:'Clicks follow an 80/20 rule. Caching 20% of a year\'s links: 1.2B × 0.2 × 500 B ≈ 120 GB, so a 128 GB cache fits.'}
+];
+function renderEsts(){
+  $('#estlist').innerHTML=ESTS.map(e=>{
+    const v=st.est[e.id], num=parseFloat(v), good=!isNaN(num)&&num>=e.lo&&num<=e.hi;
+    const cls=isNaN(num)?'v-warn':good?'v-ok':'v-bad';
+    const head=isNaN(num)?`Answer: ${e.ans}.`:good?`Close enough (${e.ans}).`:`Off. Expected ${e.ans}.`;
+    return `<div class="est ${st.estChecked?'checked':''}"><label for="est-${e.id}">${e.q}</label><span class="inp"><input id="est-${e.id}" data-id="${e.id}" inputmode="decimal" value="${v??''}" placeholder="?"><span class="unit">${e.unit}</span></span><div class="verdict ${cls}"><b>${head}</b> ${e.work}</div></div>`;
+  }).join('');
+  $$('#estlist input').forEach(i=>i.oninput=()=>{st.est[i.dataset.id]=i.value; save();});
+  if(st.estChecked){const g=ESTS.filter(e=>{const n=parseFloat(st.est[e.id]);return n>=e.lo&&n<=e.hi}).length; $('#estScore').textContent=`${g} of ${ESTS.length} in the right range.`;}
+}
+$('#estCheck').onclick=()=>{st.estChecked=true; save(); renderEsts(); goStep('est');};
+
+/* ---------- palette ---------- */
+$('#palette').innerHTML=ORDER.map(t=>`<button class="pal-item" data-type="${t}">${icon(t)}<span>${CAT[t].name}<small>${CAT[t].tag}</small></span></button>`).join('');
+let pdrag=null;
+$$('.pal-item').forEach(b=>b.addEventListener('pointerdown',e=>{
+  pdrag={type:b.dataset.type,sx:e.clientX,sy:e.clientY,ghost:null,mouse:e.pointerType==='mouse'};
+  if(pdrag.mouse)e.preventDefault();
+}));
+addEventListener('pointermove',e=>{
+  if(!pdrag||!pdrag.mouse)return;
+  if(!pdrag.ghost&&Math.hypot(e.clientX-pdrag.sx,e.clientY-pdrag.sy)>6){
+    const g=document.createElement('div'); g.className='pal-item ghost'; g.innerHTML=icon(pdrag.type)+`<span>${CAT[pdrag.type].name}</span>`; document.body.appendChild(g); pdrag.ghost=g;
+  }
+  if(pdrag.ghost){pdrag.ghost.style.left=e.clientX+'px';pdrag.ghost.style.top=e.clientY+'px';}
+});
+addEventListener('pointerup',e=>{
+  if(!pdrag)return; const p=pdrag; pdrag=null;
+  if(p.ghost){
+    p.ghost.remove();
+    const r=$('#boardwrap').getBoundingClientRect();
+    if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){const pt=svgPt(e); addNode(p.type,pt.x-W/2,pt.y-H/2);}
+  } else if(Math.hypot(e.clientX-p.sx,e.clientY-p.sy)<=6 && e.target.closest('.pal-item')) addNode(p.type);
+});
+function freeSpot(type){
+  const x=COLX[type]; const ys=[280,150,410,40,520];
+  for(const y of ys){ if(!D().nodes.some(n=>Math.abs(n.x-x)<W&&Math.abs(n.y-y)<H+10))return {x,y}; }
+  return {x:x+30,y:300};
+}
+function addNode(type,x,y){
+  if(x===undefined)({x,y}=freeSpot(type));
+  const cfg={}; CAT[type].cfg.forEach(f=>cfg[f.k]=f.def);
+  const n={id:'n'+(seq++),type,x:Math.round(x),y:Math.round(y),cfg};
+  D().nodes.push(n); designChanged(); select({kind:'node',id:n.id}); setTab('inspect');
+}
+
+/* ---------- board ---------- */
+const board=$('#board'), gE=$('#gEdges'), gN=$('#gNodes'), gP=$('#gParts');
+let sel=null, nodeEl={}, edgeEl={};
+function svgPt(e){const p=board.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; return p.matrixTransform(board.getScreenCTM().inverse());}
+function edgeD(a,b){const x1=a.x+W,y1=a.y+H/2,x2=b.x-2,y2=b.y+H/2,dx=Math.max(40,Math.abs(x2-x1)/2); return `M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`;}
+function renderBoard(){
+  const d=D();
+  gE.innerHTML=d.edges.map(e=>{const a=byId(e.from),b=byId(e.to); const dd=edgeD(a,b); const s=sel&&sel.kind==='edge'&&sel.from===e.from&&sel.to===e.to;
+    return `<path class="edge${s?' sel':''}" d="${dd}" marker-end="url(#arr)" data-k="${e.from}>${e.to}"/><path class="ehit" d="${dd}" data-from="${e.from}" data-to="${e.to}"/>`}).join('');
+  gN.innerHTML=d.nodes.map(n=>{
+    const c=CAT[n.type], cnt=c.count(n.cfg);
+    let s=`<g class="node${sel&&sel.kind==='node'&&sel.id===n.id?' sel':''}" data-id="${n.id}" transform="translate(${n.x},${n.y})" tabindex="0" role="button" aria-label="${c.name}">`;
+    if(cnt>2)s+=`<rect class="stack" x="8" y="-8" width="${W}" height="${H}" rx="10"/>`;
+    if(cnt>1)s+=`<rect class="stack" x="4" y="-4" width="${W}" height="${H}" rx="10"/>`;
+    s+=`<rect class="body" width="${W}" height="${H}" rx="10"/><g class="ico" transform="translate(12,18)">${ICON[n.type]}</g>`;
+    s+=`<text class="nm" x="44" y="26">${c.name}</text><text class="sb" x="44" y="43">${c.sub(n.cfg)}</text>`;
+    s+=`<rect class="ubg" x="10" y="${H-7}" width="${W-20}" height="3" rx="1.5"/><rect class="ub" x="10" y="${H-7}" width="0" height="3" rx="1.5"/>`;
+    s+=`<text class="badge" x="${W-8}" y="14" text-anchor="end"></text>`;
+    if(ALLOW[n.type].length)s+=`<circle class="handle" cx="${W}" cy="${H/2}" r="7"><title>Drag to connect</title></circle>`;
+    return s+'</g>';
+  }).join('');
+  nodeEl={}; $$('#gNodes .node').forEach(g=>nodeEl[g.dataset.id]=g);
+  edgeEl={}; $$('#gEdges .edge').forEach(p=>edgeEl[p.dataset.k]={el:p,len:p.getTotalLength()});
+  $('#hint').textContent=d.nodes.length<=3&&!S.running?'Starter design: fine on a whiteboard, fragile in production. Press Run to watch it, then improve it.':'';
+  renderHud(); updateReview();
+}
+function moveNodeVisual(n){
+  const g=nodeEl[n.id]; if(g)g.setAttribute('transform',`translate(${n.x},${n.y})`);
+  D().edges.forEach(e=>{ if(e.from===n.id||e.to===n.id){const k=e.from+'>'+e.to; const dd=edgeD(byId(e.from),byId(e.to)); const p=edgeEl[k]; if(p){p.el.setAttribute('d',dd); p.len=p.el.getTotalLength();} const h=gE.querySelector(`.ehit[data-from="${e.from}"][data-to="${e.to}"]`); if(h)h.setAttribute('d',dd);} });
+}
+let bdrag=null;
+board.addEventListener('pointerdown',e=>{
+  const pt=svgPt(e), h=e.target.closest('.handle'), g=e.target.closest('.node'), eh=e.target.closest('.ehit');
+  if(h&&g){bdrag={mode:'link',from:g.dataset.id};}
+  else if(g){const n=byId(g.dataset.id); bdrag={mode:'move',id:n.id,dx:pt.x-n.x,dy:pt.y-n.y,sx:pt.x,sy:pt.y,moved:false}; select({kind:'node',id:n.id}); setTab('inspect');}
+  else if(eh){select({kind:'edge',from:eh.dataset.from,to:eh.dataset.to}); setTab('inspect');}
+  else {select(null);}
+  if(bdrag){board.setPointerCapture(e.pointerId); e.preventDefault();}
+});
+board.addEventListener('pointermove',e=>{
+  if(!bdrag)return; const pt=svgPt(e);
+  if(bdrag.mode==='move'){const n=byId(bdrag.id); if(Math.hypot(pt.x-bdrag.sx,pt.y-bdrag.sy)>3)bdrag.moved=true; n.x=Math.round(pt.x-bdrag.dx); n.y=Math.round(pt.y-bdrag.dy); moveNodeVisual(n);}
+  else {const a=byId(bdrag.from); $('#tempLine').setAttribute('d',`M${a.x+W} ${a.y+H/2}L${pt.x} ${pt.y}`);}
+});
+board.addEventListener('pointerup',e=>{
+  if(!bdrag)return; const b=bdrag; bdrag=null; const pt=svgPt(e);
+  if(b.mode==='move'){ if(b.moved)save(); }
+  else { $('#tempLine').setAttribute('d',''); const t=D().nodes.find(n=>pt.x>=n.x-6&&pt.x<=n.x+W+6&&pt.y>=n.y-6&&pt.y<=n.y+H+6); if(t)addEdge(b.from,t.id); }
+});
+board.addEventListener('keydown',e=>{const g=e.target.closest&&e.target.closest('.node'); if(g&&(e.key==='Enter'||e.key===' ')){select({kind:'node',id:g.dataset.id}); setTab('inspect'); e.preventDefault();}});
+addEventListener('keydown',e=>{
+  if((e.key==='Delete'||e.key==='Backspace')&&sel&&st.step==='build'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)){removeSel(); e.preventDefault();}
+});
+function addEdge(from,to){
+  if(from===to)return;
+  const a=typeOf(from),b=typeOf(to);
+  if(D().edges.some(e=>e.from===from&&e.to===to))return toast('Those two are already connected.');
+  if(!ALLOW[a].includes(b))return toast(edgeWhy(a,b),5200);
+  D().edges.push({from,to}); designChanged(); select({kind:'edge',from,to});
+}
+function removeSel(){
+  if(!sel)return;
+  if(sel.kind==='node'){ if(sel.id==='client')return toast('Users stay on the board: every design starts with them.'); D().nodes=D().nodes.filter(n=>n.id!==sel.id); D().edges=D().edges.filter(e=>e.from!==sel.id&&e.to!==sel.id); }
+  else D().edges=D().edges.filter(e=>!(e.from===sel.from&&e.to===sel.to));
+  sel=null; designChanged();
+}
+function select(s){sel=s; $$('#gNodes .node').forEach(g=>g.classList.toggle('sel',!!s&&s.kind==='node'&&s.id===g.dataset.id)); $$('#gEdges .edge').forEach(p=>p.classList.toggle('sel',!!s&&s.kind==='edge'&&p.dataset.k===s.from+'>'+s.to)); if(tab==='inspect')renderPane();}
+function designChanged(){save(); renderBoard(); if(S.now>0)rebuildRuntime(); else S.rt=buildRuntime(); renderPane();}
+let toastT=0;
+function toast(m,ms=3200){const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),ms);}
+
+/* ---------- simulation: discrete-event queueing ---------- */
+const S={now:0,running:false,speed:1,mult:1,rt:null,buckets:[],evalMode:false,script:[],evalPhases:null};
+let HEAP=[];
+function push(e){const h=HEAP;h.push(e);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p].t<=e.t)break;h[i]=h[p];i=p;}h[i]=e;}
+function pop(){const h=HEAP,top=h[0],last=h.pop();if(h.length){let i=0;const n=h.length;for(;;){const l=2*i+1;if(l>=n)break;const r=l+1;const m=(r<n&&h[r].t<h[l].t)?r:l;if(h[m].t>=last.t)break;h[i]=h[m];i=m;}h[i]=last;}return top;}
+const at=(dt,f)=>push({t:S.now+dt,f});
+const expo=m=>-Math.log(1-Math.random())*m;
+const READ_TIMEOUT=2000, WRITE_TIMEOUT=6000;
+function mkPool(servers){return {servers,busy:0,q:[],qh:0,maxQ:Math.max(64,servers*25)};}
+const qlen=p=>p.q.length-p.qh;
+function enter(p,job){ if(p.servers<=0)return false; if(p.busy<p.servers){p.busy++;job.start();return true;} if(qlen(p)<p.maxQ){p.q.push(job);return true;} return false; }
+function leave(p){ p.busy--; while(p.busy<p.servers&&qlen(p)>0){const j=p.q[p.qh++]; if(p.qh>2048){p.q=p.q.slice(p.qh);p.qh=0;} if(S.now-j.t>READ_TIMEOUT){j.fail();continue;} p.busy++; j.start();} }
+function setServers(p,s){ p.servers=Math.max(0,s); if(p.servers===0){const js=p.q.slice(p.qh); p.q=[];p.qh=0; js.forEach(j=>j.fail());} else leave(Object.assign(p,{busy:p.busy+1})); }
+let wallNow=0;
+function particle(a,b,req){ if(parts.length<220)parts.push({k:a+'>'+b,t0:wallNow,c:req.type==='R'?'pr':'pw'}); }
+function visit(from,id,req,op,cb){
+  const r=S.rt[id];
+  req.net+=0.5;
+  if(req.viz)particle(from,id,req);
+  if(!r||r.down){ if(r){r.drop++;} if(req.viz)flash(id); return cb(false); }
+  const pool=r.pool(op,req);
+  r.arr++;
+  const job={t:S.now,start(){at(expo(r.svc(op)),()=>r.handle(req,op,ok=>{leave(pool);cb(ok);}));},fail(){r.drop++; if(req.viz)flash(id); cb(false);}};
+  if(!enter(pool,job)){ r.drop++; if(req.viz)flash(id); cb(false); }
+}
+function buildRuntime(){
+  const rt={};
+  for(const nd of D().nodes){
+    const out={}; D().edges.filter(e=>e.from===nd.id).forEach(e=>{const t=typeOf(e.to);(out[t]=out[t]||[]).push(e.to);});
+    const first=t=>(out[t]||[])[0];
+    const r={id:nd.id,type:nd.type,cfg:{...nd.cfg},arr:0,drop:0,u:0,down:false,out,_d:0,_a:0};
+    const leaf=(req,op,done)=>done(true);
+    switch(nd.type){
+      case 'client': r.entry=first('cdn')||first('lb')||first('app'); break;
+      case 'cdn': { const p=mkPool(1e6); r.pool=()=>p; r.pools=[]; r.svc=()=>0.2; const next=first('lb')||first('app');
+        r.handle=(req,op,done)=>{ if(req.type==='R'&&Math.random()<0.6){req.cdn=true;return done(true);} if(!next)return done(false); visit(r.id,next,req,op,done); }; break; }
+      case 'lb': { const p=mkPool(1e6); r.pool=()=>p; r.pools=[]; r.svc=()=>0.1; const apps=out.app||[];
+        r.handle=(req,op,done)=>{ let best=null,bu=1e9; for(const a of apps){const x=S.rt[a]; if(!x||x.down)continue; const u=(x.p.busy+qlen(x.p))/Math.max(1,x.p.servers); if(u<bu){bu=u;best=a;}} if(!best)return done(false); visit(r.id,best,req,op,done); }; break; }
+      case 'app': { r.alive=nd.cfg.inst; r.p=mkPool(r.alive*16); r.pools=[r.p]; r.pool=()=>r.p; r.svc=()=>3;
+        const cache=first('cache'), db=first('sql')||first('nosql'), kgs=first('kgs'), queue=first('queue');
+        r.handle=(req,op,done)=>{
+          if(req.type==='R'){
+            if(queue){const q=S.rt[queue]; if(q&&!q.down)q.backlog++;}
+            const dbRead=()=>{ if(db)visit(r.id,db,req,'read',done); else done(!!cache); };
+            if(cache){ visit(r.id,cache,req,'get',ok=>{ const b=bucket(); b.look++; if(ok&&req.hit){b.hit++; return done(true);} dbRead(); }); }
+            else dbRead();
+          } else {
+            let tries=0;
+            const write=()=>{ const fin=ok=>{ if(ok||++tries>=5||!db)return done(ok); at(1000,write); }; if(db)visit(r.id,db,req,'write',fin); else if(cache)visit(r.id,cache,req,'set',fin); else done(false); };
+            const check=()=>{ if(db)visit(r.id,db,req,'read',ok=>ok?write():done(false)); else write(); };
+            if(kgs)visit(r.id,kgs,req,'key',ok=>ok?write():check()); else check();
+          }
+        }; break; }
+      case 'cache': { r.rep=nd.cfg.rep; r.p=mkPool(8); r.pools=[r.p]; r.pool=()=>r.p; r.svc=()=>0.15; r.warm=-1e9;
+        r.handle=(req,op,done)=>{ if(op==='get')req.hit=Math.random()<hitRate(r); done(true); }; break; }
+      case 'sql': { r.shards=[]; for(let i=0;i<nd.cfg.shards;i++)r.shards.push({primary:true,rep:nd.cfg.rep,read:mkPool((1+nd.cfg.rep)*16),write:mkPool(8)});
+        r.pools=r.shards.flatMap(s=>[s.read,s.write]);
+        r.pool=(op)=>{const s=r.shards[(Math.random()*r.shards.length)|0]; return op==='write'?s.write:s.read;};
+        r.svc=op=>op==='write'?15:8; r.handle=leaf; break; }
+      case 'nosql': { r.alive=nd.cfg.n; r.p=mkPool(r.alive*16); r.pools=[r.p]; r.pool=()=>r.p; r.svc=op=>op==='write'?7:5; r.handle=leaf; break; }
+      case 'kgs': { r.alive=nd.cfg.inst; r.p=mkPool(r.alive*8); r.pools=[r.p]; r.pool=()=>r.p; r.svc=()=>0.5; r.handle=leaf; break; }
+      case 'queue': { r.backlog=0; r.pools=[]; r.workers=out.worker||[]; break; }
+      case 'worker': { r.alive=nd.cfg.inst; r.pools=[]; break; }
+    }
+    rt[nd.id]=r;
+  }
+  return rt;
+}
+function hitRate(r){ return CACHE_HIT[r.cfg.size]*Math.min(1,Math.max(0,(S.now-r.warm)/20000)); }
+function bucket(t){ const s=Math.floor((t??S.now)/1000); return S.buckets[s]||(S.buckets[s]={r:[],w:[],rf:0,wf:0,hit:0,look:0}); }
+function finish(req,ok){
+  const lat=S.now-req.t0+req.net+(req.cdn?10:40);
+  if(lat>(req.type==='R'?READ_TIMEOUT:WRITE_TIMEOUT))ok=false;
+  const b=bucket(req.t0);
+  if(req.type==='R'){ if(ok)b.r.push(lat); else b.rf++; } else { if(ok)b.w.push(lat); else b.wf++; }
+}
+function spawn(type){
+  const c=S.rt.client, rate=(type==='R'?BASE_R:BASE_W)*S.mult;
+  const req={type,t0:S.now,net:0,viz:Math.random()<(type==='R'?36/rate:5/rate)};
+  if(!c.entry){finish(req,false);return;}
+  visit('client',c.entry,req,type==='R'?'read':'write',ok=>finish(req,ok));
+}
+function arrival(type){ return function f(){ spawn(type); at(expo(1000/((type==='R'?BASE_R:BASE_W)*S.mult)),f); }; }
+function tick(){
+  for(const id in S.rt){const q=S.rt[id]; if(q.type!=='queue')continue; let cap=0; q.workers.forEach(w=>{const x=S.rt[w]; if(x)cap+=x.alive*2000*0.1;}); q.backlog=Math.max(0,q.backlog-cap);}
+  while(S.script.length&&S.script[0].t<=S.now){S.script.shift().a();}
+  at(100,tick);
+}
+function rebuildRuntime(){ S.rt=buildRuntime(); HEAP=[]; at(0,arrival('R')); at(0,arrival('W')); at(100,tick); }
+function startSim(fresh){
+  if(fresh||!S.rt){S.now=0; S.buckets=[];}
+  if(!S.rt.client.entry){toast('Connect Users to something first: drag from the dot on the right of Users.'); return false;}
+  S.running=true; $('#runBtn').textContent='❚❚ Pause'; $('#hint').textContent=''; return true;
+}
+function stopSim(){S.running=false; $('#runBtn').textContent='▶ Run';}
+function resetSim(){ stopSim(); S.evalMode=false; S.script=[]; S.mult=1; $('#traffic').value=1; trafficLbl(); S.now=0; S.buckets=[]; rebuildRuntime(); parts.length=0; $('#timeline').classList.remove('on'); clearNodeStates(); renderHud(); }
+
+/* chaos */
+function firstOf(types){ for(const n of D().nodes)if(types.includes(n.type)&&S.rt[n.id])return S.rt[n.id]; return null; }
+function usedDb(){ for(const n of D().nodes)if(n.type==='app'){const r=S.rt[n.id]; const d=(r.out.sql||[])[0]||(r.out.nosql||[])[0]; if(d)return S.rt[d];} return firstOf(['sql','nosql']); }
+const CHAOS={
+  app(){ let best=null; for(const id in S.rt){const r=S.rt[id]; if(r.type==='app'&&r.alive>0&&(!best||r.alive>best.alive))best=r;} if(!best)return 'No app server is running.';
+    best.alive--; setServers(best.p,best.alive*16); if(best.alive===0)best.down=true; return best.alive?`An app server instance died. ${best.alive} left.`:'Your only app server instance died. Nothing can serve requests.'; },
+  db(){ const r=usedDb(); if(!r)return 'There is no database to break.';
+    if(r.type==='nosql'){ r.alive--; setServers(r.p,r.alive*16); if(r.alive===0){r.down=true; return 'Your only NoSQL node died. All data is unreachable.';}
+      at(10000,()=>{r.alive++; setServers(r.p,r.alive*16);}); return `A NoSQL node died. The other ${r.alive} keep serving its keys from their copies; a replacement joins in 10 s.`; }
+    const s=r.shards.find(x=>x.primary); if(!s)return 'Every primary is already down.';
+    s.primary=false; setServers(s.write,0);
+    if(s.rep===0){ setServers(s.read,0); if(r.shards.every(x=>x.read.servers===0))r.down=true; return r.shards.length>1?`A shard's only machine died. 1 in ${r.shards.length} links are now unreachable.`:'Your only database machine died. Every link is unreachable.'; }
+    setServers(s.read,s.rep*16);
+    at(3000,()=>{s.rep--; s.primary=true; setServers(s.write,8); setServers(s.read,(1+s.rep)*16); at(10000,()=>{s.rep++; setServers(s.read,(1+s.rep)*16);});});
+    return 'A database primary died. Replicas keep serving reads; writes fail until a replica is promoted (~3 s).'; },
+  cache(){ const r=firstOf(['cache']); if(!r)return 'There is no cache to break.';
+    if(r.rep>0){ r.down=true; at(1000,()=>{r.down=false; r.rep--;}); return 'A cache node died. Its replica takes over in about 1 s with the data still warm.'; }
+    r.down=true; at(3000,()=>{r.down=false; r.warm=S.now;}); return 'The cache died with no replica. Every click hits the database until it restarts empty and warms up.'; }
+};
+
+/* evaluation */
+const PHASES=[{n:'Normal day',a:0,b:10},{n:'Viral spike, 5× traffic',a:10,b:25},{n:'A database machine dies',a:25,b:40,noWriteLat:true},{n:'A cache node dies',a:40,b:60}];
+function startEval(){
+  resetSim(); S.evalMode=true;
+  if(!startSim(true))return;
+  S.script=[{t:10000,a:()=>{S.mult=5; trafficLbl(); toast('Viral spike: traffic jumps to 5×.');}},{t:25000,a:()=>{S.mult=1; trafficLbl();}},{t:27000,a:()=>toast(CHAOS.db(),4500)},{t:42000,a:()=>toast(CHAOS.cache(),4500)},{t:60000,a:endEval}];
+  const tl=$('#timeline'); tl.innerHTML=PHASES.map((p,i)=>`<div class="ph" style="flex:${p.b-p.a}" id="ph${i}">${p.n}</div>`).join('')+'<div class="cursor" id="tlcur"></div>'; tl.classList.add('on');
+  $('#evalBtn').disabled=true;
+}
+function pct(a,q){ if(!a.length)return NaN; const s=Float64Array.from(a).sort(); return s[Math.min(s.length-1,Math.floor(q*s.length))]; }
+function gather(a,b){ const r=[],w=[]; let rf=0,wf=0,hit=0,look=0; for(let i=a;i<b;i++){const x=S.buckets[i]; if(!x)continue; for(const v of x.r)r.push(v); for(const v of x.w)w.push(v); rf+=x.rf; wf+=x.wf; hit+=x.hit; look+=x.look;} return {r,w,rf,wf,hit,look}; }
+function gradePhase(p){
+  const g=gather(p.a,p.b), rt=g.r.length+g.rf, wt=g.w.length+g.wf;
+  const res={name:p.n,rAvail:rt?g.r.length/rt:0,rP99:pct(g.r,.99),wAvail:wt?g.w.length/wt:0,wP99:pct(g.w,.99),noWriteLat:!!p.noWriteLat,reads:rt,writes:wt};
+  res.checks=[res.rAvail>=.999, res.rP99<=100, res.wAvail>=.99, p.noWriteLat||res.wP99<=1000];
+  res.pass=res.checks.every(Boolean); return res;
+}
+function endEval(){
+  stopSim(); S.evalMode=false; $('#evalBtn').disabled=false;
+  const phases=PHASES.map(gradePhase);
+  phases.forEach((p,i)=>$('#ph'+i)?.classList.add(p.pass?'pass':'fail'));
+  const rules=review();
+  st.lastEval={phases,cost:totalCost(),rules:rules.map(r=>({lvl:r.lvl,t:r.t})),design:JSON.parse(JSON.stringify(D())),at:Date.now()};
+  save(); setTab('results'); goStep('build');
+  const n=phases.filter(p=>p.pass).length; toast(`Evaluation done: ${n} of ${phases.length} scenarios passed. See Results.`,4500);
+}
+
+/* ---------- loop & visuals ---------- */
+const parts=[]; let partEls=[];
+function flash(id){ const g=nodeEl[id]; if(g){g.classList.add('flash'); g._fl=wallNow+250;} }
+function drawParticles(){
+  const DUR=420;
+  for(let i=parts.length-1;i>=0;i--) if(wallNow-parts[i].t0>DUR)parts.splice(i,1);
+  while(partEls.length<parts.length){const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('r','3.6'); gP.appendChild(c); partEls.push(c);}
+  partEls.forEach((c,i)=>{ const p=parts[i]; if(!p){c.setAttribute('visibility','hidden');return;} const e=edgeEl[p.k]; if(!e){c.setAttribute('visibility','hidden');return;}
+    const pt=e.el.getPointAtLength(e.len*Math.min(1,(wallNow-p.t0)/DUR)); c.setAttribute('cx',pt.x); c.setAttribute('cy',pt.y); c.setAttribute('class',p.c); c.setAttribute('visibility','visible'); });
+}
+function utilOf(r){ if(!r.pools||!r.pools.length)return 0; let u=0; for(const p of r.pools){ if(p.servers>0)u=Math.max(u,Math.min(1,(p.busy+qlen(p)*0.05)/p.servers)); } return u; }
+function clearNodeStates(){ for(const id in nodeEl){const g=nodeEl[id]; g.removeAttribute('data-st'); const ub=g.querySelector('.ub'); if(ub)ub.setAttribute('width',0); const bd=g.querySelector('.badge'); if(bd)bd.textContent='';} }
+let lastUi=0,lastSim=0;
+function uiTick(){
+  if(!S.rt)return; const dt=Math.max(0.001,(S.now-lastSim)/1000); lastSim=S.now;
+  for(const id in S.rt){ const r=S.rt[id], g=nodeEl[id]; if(!g)continue;
+    const u=utilOf(r); r.u=r.u*.4+u*.6;
+    const drops=r.drop-r._d; r._d=r.drop; r.rate=(r.arr-r._a)/dt; r._a=r.arr; r.dropRate=drops/dt;
+    let dead=r.down||(r.type==='sql'&&r.shards.every(s=>s.read.servers===0));
+    const stt=dead?'down':(drops>0||r.u>.9)?'hot':r.u>.7?'warn':'ok';
+    if(r.type==='client'){continue;}
+    g.setAttribute('data-st',S.running||S.now>0?stt:'');
+    const ub=g.querySelector('.ub'); if(ub)ub.setAttribute('width',(W-20)*Math.min(1,r.u));
+    const bd=g.querySelector('.badge');
+    if(bd)bd.textContent=dead?'DOWN':r.type==='queue'?`backlog ${fmt(r.backlog)}`:(drops>0?'dropping':r.pools.length?Math.round(r.u*100)+'%':'');
+  }
+  renderHud(); if(tab==='inspect'&&sel&&sel.kind==='node')renderLive();
+  if(S.evalMode){ $('#tlcur').style.left=Math.min(100,S.now/600)+'%'; }
+}
+function loop(ts){
+  const dt=Math.min(50,ts-(loop.last||ts)); loop.last=ts; wallNow=ts;
+  if(S.running){ const T=S.now+dt*S.speed; let guard=0; while(HEAP.length&&HEAP[0].t<=T&&guard<600000){const e=pop(); S.now=e.t; e.f(); guard++; if(!S.running)break;} if(S.running)S.now=T; }
+  for(const id in nodeEl){const g=nodeEl[id]; if(g._fl&&ts>g._fl){g.classList.remove('flash'); g._fl=0;}}
+  drawParticles();
+  if(ts-lastUi>300){uiTick(); lastUi=ts;}
+  requestAnimationFrame(loop);
+}
+
+/* ---------- HUD ---------- */
+function liveStats(){
+  const s=Math.floor(S.now/1000); const a=Math.max(0,s-2);
+  const g=gather(a,s); const span=Math.max(1,s-a);
+  const rt=g.r.length+g.rf, wt=g.w.length+g.wf;
+  return {rps:rt/span,wps:wt/span,succ:(rt+wt)?(g.r.length+g.w.length)/(rt+wt):NaN,rp99:pct(g.r,.99),rp50:pct(g.r,.5),wp99:pct(g.w,.99),hit:g.look?g.hit/g.look:NaN,has:rt>0};
+}
+function renderHud(){
+  const cost=totalCost(); const L=S.now>2000?liveStats():null;
+  const t=(lbl,val,cls='')=>`<div class="tile ${cls}"><span>${lbl}</span><strong>${val}</strong></div>`;
+  let h='';
+  if(L&&L.has){
+    h+=t('Clicks/s',fmt(L.rps))+t('Success',isNaN(L.succ)?'–':(L.succ*100).toFixed(L.succ>.999?2:1)+'%',L.succ>=.999?'good':'bad');
+    h+=t('Click p99',isNaN(L.rp99)?'–':fmt(L.rp99)+' ms',L.rp99<=100?'good':'bad')+t('New link p99',isNaN(L.wp99)?'–':fmt(L.wp99)+' ms');
+    if(!isNaN(L.hit))h+=t('Cache hits',Math.round(L.hit*100)+'%');
+  }
+  h+=t('Cost / month','$'+fmt(cost),cost>BUDGET?'bad':'');
+  $('#hud').innerHTML=h;
+}
+
+/* ---------- side pane ---------- */
+let tab='inspect';
+function setTab(t){tab=t; $$('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t)); renderPane();}
+$$('.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+function learnHTML(t){
+  const c=CAT[t];
+  return `<div class="visual">${visual(t)}<div class="legend"><span><i style="background:var(--read)"></i>click (read)</span><span><i style="background:var(--write)"></i>new link (write)</span><span><i style="background:var(--ok)"></i>answered early</span></div></div>
+  <div class="learn"><section><h4>What it does</h4><p>${c.what}</p></section><section><h4>Use it when</h4><p>${c.when}</p></section><section><h4>Watch out for</h4><p>${c.watch}</p></section><section><h4>Numbers in this game</h4><p>${c.nums}</p></section><section class="here"><h4>In this problem</h4><p>${c.here}</p></section></div>`;
+}
+function renderPane(){
+  const p=$('#pane');
+  if(tab==='review'){p.innerHTML=reviewHTML(); return;}
+  if(tab==='results'){p.innerHTML=resultsHTML(); return;}
+  if(sel&&sel.kind==='node'&&byId(sel.id)){
+    const n=byId(sel.id), c=CAT[n.type];
+    let h=`<div class="card-h">${icon(n.type,28)}<h2>${c.name}</h2>${c.fixed?'':'<button class="btn small danger" id="delBtn">Remove</button>'}</div>`;
+    if(c.cfg.length||!c.fixed){
+      h+=`<div class="cfg">`+c.cfg.map(f=>f.opts?`<div class="f"><label for="cfg-${f.k}">${f.label}</label><select id="cfg-${f.k}" data-k="${f.k}">${f.opts.map(o=>`<option value="${o}" ${n.cfg[f.k]==o?'selected':''}>${o} ${f.unit}</option>`).join('')}</select></div>`
+        :`<div class="f"><label>${f.label}</label><span class="stepper"><button data-k="${f.k}" data-d="-1" aria-label="Fewer">−</button><output class="num">${n.cfg[f.k]}</output><button data-k="${f.k}" data-d="1" aria-label="More">+</button></span></div>`).join('')+`<div class="cost"><span>Cost</span><span class="num">$${fmt(c.cost(n.cfg))} / month</span></div></div>`;
+    }
+    h+=`<div id="liveBox"></div>`+learnHTML(n.type);
+    p.innerHTML=h;
+    $('#delBtn')&&($('#delBtn').onclick=removeSel);
+    $$('#pane .stepper button').forEach(b=>b.onclick=()=>{const f=c.cfg.find(x=>x.k===b.dataset.k); n.cfg[f.k]=Math.max(f.min,Math.min(f.max,n.cfg[f.k]+ +b.dataset.d)); designChanged();});
+    $$('#pane select').forEach(s=>s.onchange=()=>{n.cfg[s.dataset.k]=+s.value; designChanged();});
+    renderLive(); pausVis(); return;
+  }
+  if(sel&&sel.kind==='edge'){
+    const a=CAT[typeOf(sel.from)].name,b=CAT[typeOf(sel.to)].name;
+    p.innerHTML=`<div class="card-h"><h2>${a} → ${b}</h2><button class="btn small danger" id="delBtn">Remove</button></div><p class="lead">${a} sends requests to ${b}. Each hop inside the data center adds about 0.5 ms. Press Delete or use Remove to disconnect.</p>`;
+    $('#delBtn').onclick=removeSel; return;
+  }
+  p.innerHTML=`<h3>How to play</h3><ol class="howto"><li>Add components from the left. Click one on the board to configure it.</li><li>Connect them by dragging from a node's right-hand dot to another node.</li><li>Press Run to send live traffic, and use Break to kill machines.</li><li>Run evaluation for the graded 60-second test: normal day, viral spike, a database failure, a cache failure.</li></ol>
+  <h3>Component guide</h3><div class="guide">${['client',...ORDER].map(t=>`<button data-learn="${t}">${icon(t)}<span><b>${CAT[t].name}</b><small>${CAT[t].tag}</small></span></button>`).join('')}</div>`;
+  $$('[data-learn]').forEach(b=>b.onclick=()=>{const t=b.dataset.learn; p.innerHTML=`<div class="card-h">${icon(t,28)}<h2>${CAT[t].name}</h2><button class="btn small" id="backBtn">All components</button></div>`+learnHTML(t)+(t==='client'?'':`<button class="btn primary" id="addBtn">Add to board</button>`); $('#backBtn').onclick=()=>renderPane(); $('#addBtn')&&($('#addBtn').onclick=()=>addNode(t)); pausVis();});
+}
+function pausVis(){ if(REDUCED)$$('#pane .visual svg').forEach(s=>s.pauseAnimations&&s.pauseAnimations()); }
+function renderLive(){
+  const box=$('#liveBox'); if(!box||!sel)return; const r=S.rt&&S.rt[sel.id];
+  if(!r||S.now===0||r.type==='client'){box.innerHTML='';return;}
+  const t=(l,v)=>`<div class="tile"><span>${l}</span><strong>${v}</strong></div>`;
+  let h=t('Requests/s',fmt(r.rate||0))+t('Busy',Math.round(r.u*100)+'%')+t('Dropped/s',fmt(r.dropRate||0));
+  if(r.type==='queue')h=t('Backlog',fmt(r.backlog))+t('Workers',(r.workers||[]).length);
+  if(r.type==='cache')h+=t('Hit rate now',Math.round(hitRate(r)*100)+'%');
+  if(r.down)h+=t('State','DOWN');
+  box.innerHTML=`<h3>Live</h3><div class="live">${h}</div>`;
+}
+
+/* ---------- design review (rule checks) ---------- */
+function review(){
+  const d=D(), out=[], R=(lvl,t,dd)=>out.push({lvl,t,d:dd});
+  const nodes=d.nodes, kids=id=>d.edges.filter(e=>e.from===id).map(e=>e.to);
+  const seen=new Set(['client']), stack=['client']; while(stack.length){for(const k of kids(stack.pop()))if(!seen.has(k)){seen.add(k);stack.push(k);}}
+  const live=nodes.filter(n=>seen.has(n.id)), of=t=>live.filter(n=>n.type===t);
+  const apps=of('app'), appInst=apps.reduce((s,n)=>s+n.cfg.inst,0);
+  if(!apps.length){R('fail','Users can\'t reach an app server','Draw a path from Users to an App server, for example Users → Load balancer → App server.'); }
+  const direct=kids('client').filter(k=>typeOf(k)==='app');
+  if(direct.length&&(appInst>1||direct.length>1))R('fail','Users are wired straight to app servers','Users only know one address. Without a load balancer, one server gets all the traffic and nothing routes around failures.');
+  else if(of('lb').length&&apps.length)R('pass','A load balancer spreads the traffic','It also stops sending requests to dead instances.');
+  if(apps.length&&appInst===1)R('fail','One app server is a single point of failure','If that machine dies, every link breaks. Run at least 2 instances, and enough to survive the 5× spike.');
+  const dbIds=new Set(apps.flatMap(a=>kids(a.id)).filter(k=>['sql','nosql'].includes(typeOf(k))));
+  const dbs=[...dbIds].map(byId);
+  if(apps.length&&!dbs.length){ if(apps.some(a=>kids(a.id).some(k=>typeOf(k)==='cache')))R('fail','Your only storage is a cache','Caches live in memory and evict old entries, but links must survive 5 years. Add a database.'); else R('fail','Links have nowhere to live','Connect your app servers to a SQL database or NoSQL store.'); }
+  for(const db of dbs){
+    const cap=db.type==='sql'?db.cfg.shards*2:db.cfg.n*2/Math.min(3,db.cfg.n);
+    if(cap<3)R('fail',`Not enough disk: ${cap.toFixed(1)} TB for 3 TB of links`,db.type==='sql'?'Each SQL machine holds 2 TB, and replicas hold copies, not extra data. Add shards: 2 shards gives 4 TB.':'Usable space is nodes × 2 TB ÷ 3 copies. 5 nodes gives about 3.3 TB.');
+    else R('pass',`Storage fits: ${cap.toFixed(1)} TB usable for 3 TB`,db.type==='sql'?'Sharded by short code, so each lookup goes to exactly one shard.':'Keys are hashed across nodes, so data spreads evenly.');
+    if(db.type==='sql'&&db.cfg.rep===0)R('fail','Database machines have no replicas','When a primary dies, its links are unreachable until someone repairs it. Add at least one replica per shard.');
+    else if(db.type==='nosql'&&db.cfg.n<3)R('fail','Fewer than 3 NoSQL nodes','With 3 copies of each key you need at least 3 nodes, or one failure can lose data.');
+    else R('pass','Data survives a machine failure',db.type==='sql'?'Replicas take over reads immediately and one is promoted to primary.':'Each key has copies on other nodes.');
+  }
+  if(dbs.length>1)R('info','Two databases connected','App servers use the first one they\'re connected to. One store is enough for this problem.');
+  const caches=apps.flatMap(a=>kids(a.id)).filter(k=>typeOf(k)==='cache').map(byId);
+  if(apps.length&&!caches.length)R('warn','No cache on a 100:1 read-heavy workload','Every click goes to the database. A cache in front absorbs most reads in under a millisecond.');
+  for(const c of new Set(caches)){
+    if(c.cfg.size<128)R('warn',`Cache is smaller than the hot set (${c.cfg.size} GB vs ~120 GB)`,`Hit rate is ${Math.round(CACHE_HIT[c.cfg.size]*100)}%. Misses go to the database.`);
+    else R('pass','Cache fits the hot links',`${Math.round(CACHE_HIT[c.cfg.size]*100)}% of clicks are answered from memory.`);
+    if(c.cfg.rep===0)R('warn','Cache has no replica','If the cache node dies, all reads hit the database at once and the cache comes back empty.');
+  }
+  const kgs=apps.flatMap(a=>kids(a.id)).filter(k=>typeOf(k)==='kgs').map(byId);
+  if(apps.length&&!kgs.length)R('info','No key generator','Each new link hashes the URL and checks the database for a collision first: one extra read per write. Fine at 40 writes/s, but be ready to discuss it.');
+  else if(kgs.some(k=>k.cfg.inst===1))R('warn','One key generator is a single point of failure','App servers fall back to hashing if it dies, but say how you\'d run two that never hand out the same code.');
+  else if(kgs.length)R('pass','Short codes come from a key service','No collision checks on write, and codes can be random so they aren\'t guessable.');
+  const scope=analyticsScope();
+  if(of('cdn').length){ if(scope!=='out')R('warn','A CDN hides clicks from your analytics','Redirects answered at the edge never reach your servers. Use 302 redirects with a short cache time, or collect the CDN\'s logs.'); else R('pass','The CDN takes popular redirects off your servers','Clicks are answered at the edge in ~10 ms.'); }
+  const queues=of('queue');
+  if(scope==='must'&&!queues.length)R('warn','Click analytics have no pipeline','You marked analytics a must. Publish click events to a queue and count them with workers so redirects stay fast.');
+  for(const q of queues){ if(!kids(q.id).some(k=>typeOf(k)==='worker'))R('fail','The queue has no consumer','Messages pile up forever. Connect a Worker.'); else if(scope==='out')R('warn','You built analytics you scoped out','The queue and workers cost money for a feature you excluded.'); else R('pass','Clicks are logged asynchronously','Redirects publish an event and return immediately; workers count them later.'); }
+  const unused=nodes.filter(n=>n.id!=='client'&&!seen.has(n.id));
+  if(unused.length)R('warn','Unconnected components',`${unused.map(n=>CAT[n.type].name).join(', ')} ${unused.length>1?'aren\'t':'isn\'t'} reachable from Users but still cost money.`);
+  const cost=totalCost();
+  if(cost>BUDGET)R('fail',`Over budget: $${fmt(cost)} of $${fmt(BUDGET)} a month`,'Look for oversized pieces. A cache is usually far cheaper than more database machines.');
+  else R('pass',`Within budget: $${fmt(cost)} of $${fmt(BUDGET)} a month`,'');
+  const order={fail:0,warn:1,info:2,pass:3}; return out.sort((a,b)=>order[a.lvl]-order[b.lvl]);
+}
+const MK={fail:'FIX',warn:'WARN',info:'NOTE',pass:'OK'};
+const ruleHTML=r=>`<div class="rule ${r.lvl}"><span class="mk">${MK[r.lvl]}</span><b>${r.t}</b>${r.d?`<p>${r.d}</p>`:''}</div>`;
+function reviewHTML(){ return `<p class="lead" style="font-size:13px">Rule checks a senior interviewer would apply. They update as you edit.</p>`+review().map(ruleHTML).join(''); }
+function updateReview(){ const n=review().filter(r=>r.lvl==='fail').length; const c=$('#reviewCount'); c.textContent=n; c.classList.toggle('zero',n===0); if(tab==='review')renderPane(); }
+const pctS=v=>isNaN(v)?'–':(v*100).toFixed(v>=.999&&v<1?2:1)+'%', msS=v=>isNaN(v)?'–':fmt(v)+' ms';
+function evalTable(ev){
+  const c=(ok,txt)=>`<td class="n ${ok?'ok':'bad'}">${txt}</td>`;
+  return `<div class="tablewrap"><table class="res"><thead><tr><th>Scenario</th><th>Clicks OK<br>≥ 99.9%</th><th>Click p99<br>≤ 100 ms</th><th>New links OK<br>≥ 99%</th><th>New link p99<br>≤ 1 s</th></tr></thead><tbody>`+
+    ev.phases.map(p=>`<tr><td>${p.pass?'<span class="ok">✓</span>':'<span class="bad">✗</span>'} ${p.name}</td>${c(p.checks[0],pctS(p.rAvail))}${c(p.checks[1],msS(p.rP99))}${c(p.checks[2],pctS(p.wAvail))}${p.noWriteLat?`<td class="n mutedtxt">${msS(p.wP99)}<br><small>not graded</small></td>`:c(p.checks[3],msS(p.wP99))}</tr>`).join('')+`</tbody></table></div>`;
+}
+function resultsHTML(){
+  const ev=st.lastEval;
+  if(!ev)return `<p class="lead">No evaluation yet. Press <b>Run evaluation</b> for the graded 60-second test:</p><ol class="howto">${PHASES.map(p=>`<li><b>${p.n}</b> (${p.a}–${p.b} s)</li>`).join('')}</ol><p class="lead" style="font-size:13px">Each scenario checks click success ≥ 99.9%, click p99 ≤ 100 ms, new-link success ≥ 99% and new-link p99 ≤ 1 s.</p>`;
+  const n=ev.phases.filter(p=>p.pass).length;
+  return `<div class="score"><strong>${n}/${ev.phases.length}</strong><span class="mutedtxt">scenarios passed · $${fmt(ev.cost)}/month</span></div>${evalTable(ev)}${phaseAdvice(ev).map(a=>`<div class="rule warn"><span class="mk">WHY</span><b>${a[0]}</b><p>${a[1]}</p></div>`).join('')}<button class="btn" data-go2="debrief">Open the full debrief</button>`;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go2]'); if(b)goStep(b.dataset.go2);});
+function phaseAdvice(ev){
+  const out=[], [n,sp,db,ca]=ev.phases;
+  if(n&&!n.pass)out.push(['It fails on a normal day','Check the Review tab first: something on the main path is missing, overloaded, or a single machine.']);
+  if(sp&&!sp.pass&&(n&&n.pass))out.push(['The 5× spike overwhelms it','Look at which node turned red during the spike. Usually: too few app instances (each does ~3,500 req/s), or reads reaching the database because there\'s no cache.']);
+  if(db&&!db.pass)out.push(['A database failure breaks it','Without replicas a dead machine takes its links with it. SQL replicas keep serving reads during failover; NoSQL keeps copies on other nodes.']);
+  if(ca&&!ca.pass)out.push(['Losing the cache breaks it','When the cache dies, all reads hit the database at once (a thundering herd). Add a cache replica, or give the database enough headroom.']);
+  return out;
+}
+
+/* ---------- debrief ---------- */
+const TALK=[
+  ['Generating short codes','Three options. Hash the long URL (MD5 → base62, take 7 chars) and check for collisions. Use a global counter encoded in base62 (no collisions, but guessable unless scrambled). Or a key service that pre-generates random codes. Say why you picked one.'],
+  ['301 or 302?','301 (permanent) lets browsers and CDNs cache the redirect: less load, but you lose click counts. 302 (temporary) sends every click to you: more load, full analytics.'],
+  ['Data model','One table: code (primary key), long_url, created_at, expires_at, user_id. Every lookup is by code, which makes it a key-value workload. NoSQL or sharded SQL both work.'],
+  ['Sharding','Shard by a hash of the short code so data and traffic spread evenly. Range-based sharding creates hot spots for recent links.'],
+  ['Caching','Cache-aside with LRU eviction. Size from the 80/20 rule. Links never change, so invalidation is easy: only expiry and deletes matter.'],
+  ['Failure handling','No single points of failure: replicated load balancer, several app instances across zones, database replicas, a cache replica. Say what happens during failover.'],
+  ['Analytics','Publish click events to a queue and aggregate them in workers, so redirects never wait on analytics writes.'],
+  ['Abuse','Rate-limit link creation per user or IP, and check destination URLs against malware and phishing lists.']
+];
+function renderDebrief(){
+  const ev=st.lastEval, rules=review(), fails=rules.filter(r=>r.lvl==='fail').length;
+  const reqGood=REQS.filter(r=>r.ok.includes(st.req[r.id])).length, estGood=ESTS.filter(e=>{const n=parseFloat(st.est[e.id]);return n>=e.lo&&n<=e.hi}).length;
+  let h=`<header><span class="eyebrow">Step 4 · Debrief</span><h2>How did your design do?</h2><p class="lead">This is what you'd walk an interviewer through at the end: what you built, how it held up, and what you'd change.</p></header>`;
+  h+=`<div class="facts"><div class="fact"><span>Scope</span><strong>${st.reqChecked?`${reqGood}/${REQS.length}`:'–'}</strong></div><div class="fact"><span>Estimates</span><strong>${st.estChecked?`${estGood}/${ESTS.length}`:'–'}</strong></div><div class="fact"><span>Scenarios passed</span><strong>${ev?`${ev.phases.filter(p=>p.pass).length}/${ev.phases.length}`:'–'}</strong></div><div class="fact"><span>Design issues to fix</span><strong>${fails}</strong></div></div>`;
+  h+=`<div class="panel"><h3>Load test</h3>${ev?evalTable(ev)+phaseAdvice(ev).map(a=>`<div class="rule warn"><span class="mk">WHY</span><b>${a[0]}</b><p>${a[1]}</p></div>`).join(''):'<p class="lead">Run an evaluation in Build &amp; test to see results here.</p>'}</div>`;
+  h+=`<div class="panel"><h3>Design review</h3>${rules.map(ruleHTML).join('')}</div>`;
+  h+=`<div class="panel"><h3>Compare with a reference design</h3><p class="lead">Users → Load balancer → 6 app servers → 128 GB cache with a replica, a key generator with 2 instances, and a 5-node NoSQL store. About $2,400 a month, and it passes every scenario. Load it, run the evaluation, and compare.</p><div class="row"><button class="btn primary" id="loadRef">Load reference design</button>${st.saved?'<button class="btn" id="restoreMine">Restore my design</button>':''}</div></div>`;
+  h+=`<h3 style="font-size:20px">What interviewers listen for</h3><div class="tp">${TALK.map(t=>`<article><h3>${t[0]}</h3><p>${t[1]}</p></article>`).join('')}</div>`;
+  $('#debrief').innerHTML=h;
+  $('#loadRef').onclick=()=>{ if(!st.saved||!isRef(D()))st.saved=JSON.parse(JSON.stringify(D())); st.design=REFERENCE(); sel=null; resetSim(); save(); goStep('build'); toast('Reference design loaded. Your design is saved; restore it from the Debrief.'); };
+  $('#restoreMine')&&($('#restoreMine').onclick=()=>{ st.design=st.saved; st.saved=null; sel=null; resetSim(); save(); goStep('build'); toast('Your design is back.'); });
+}
+const isRef=d=>d.nodes.some(n=>n.id==='r1');
+
+/* ---------- sim controls ---------- */
+function trafficLbl(){ $('#trafficLbl').textContent=fmt(BASE_R*S.mult)+' clicks/s'; $('#traffic').value=S.mult; }
+$('#traffic').oninput=e=>{S.mult=+e.target.value; trafficLbl();};
+$('#speedBtn').onclick=e=>{S.speed=S.speed===1?3:1; e.target.textContent=S.speed+'×';};
+$('#runBtn').onclick=()=>{ if(S.running){stopSim(); return;} if(S.evalMode){S.running=true; $('#runBtn').textContent='❚❚ Pause'; return;} if(!S.rt||S.now===0)resetSim(); startSim(false); };
+$('#resetBtn').onclick=()=>{ resetSim(); $('#evalBtn').disabled=false; renderBoard(); };
+$('#evalBtn').onclick=startEval;
+$$('[data-kill]').forEach(b=>b.onclick=()=>{ if(!S.running||!S.rt){toast('Press Run first, then break things while traffic flows.');return;} toast(CHAOS[b.dataset.kill==='db'?'db':b.dataset.kill](),4500); });
+
+/* test hook: run the graded evaluation instantly (used for calibration) */
+window.__sdlEval=(design)=>{ if(design)st.design=design; resetSim(); S.evalMode=true; S.running=true; const msgs=[]; S.script=[{t:10000,a:()=>S.mult=5},{t:25000,a:()=>S.mult=1},{t:27000,a:()=>msgs.push(CHAOS.db())},{t:42000,a:()=>msgs.push(CHAOS.cache())},{t:60000,a:()=>{S.running=false}}];
+  while(S.running&&HEAP.length){const e=pop(); S.now=e.t; e.f();} S.evalMode=false; return {phases:PHASES.map(gradePhase),msgs,cost:totalCost(),rules:review().map(r=>r.lvl+': '+r.t)}; };
+window.__sdlRef=REFERENCE; window.__sdlStarter=STARTER;
+
+/* ---------- boot ---------- */
+renderReqs(); renderEsts(); trafficLbl();
+S.rt=buildRuntime();
+goStep(st.step||'req'); renderPane();
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
