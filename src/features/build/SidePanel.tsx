@@ -8,6 +8,7 @@ import { useSim, type PanelTab } from '../../store/sim'
 import { Advice, EvalTable, RuleItem } from '../shared/results'
 import { LearnPanel } from './LearnPanel'
 import { LivePanel } from './LivePanel'
+import { TutorPanel } from './TutorPanel'
 
 function ReviewPanel() {
   const rules = useReview()
@@ -72,11 +73,13 @@ export function SidePanel() {
             <span className={cn('rounded-full px-1.5 font-mono text-[11px]', fails ? 'bg-bad-soft text-bad' : 'bg-ok-soft text-ok')}>{fails}</span>
           </TabsTrigger>
           <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="tutor">Tutor</TabsTrigger>
         </TabsList>
         <TabsContent value="learn"><LearnPanel /></TabsContent>
         <TabsContent value="live"><LivePanel /></TabsContent>
         <TabsContent value="review"><ReviewPanel /></TabsContent>
         <TabsContent value="results"><ResultsPanel /></TabsContent>
+        <TabsContent value="tutor" className="overflow-hidden max-lg:h-[560px]"><TutorPanel /></TabsContent>
       </Tabs>
     </aside>
   )
