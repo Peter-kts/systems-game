@@ -7,6 +7,8 @@ architecture from components (load balancers, caches, databases, queues...), the
 discrete-event queueing simulation that injects traffic spikes and machine failures. A rule-based review
 explains what an interviewer would flag.
 
+Play it at https://peter-kts.github.io/systems-game/ (deployed from `main` by `.github/workflows/pages.yml`).
+
 ## Run it
 
 ```sh
