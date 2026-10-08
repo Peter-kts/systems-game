@@ -21,11 +21,13 @@ export interface Window {
   botsLimited: number
   /** Bot requests that got past the limiter to the API servers. */
   botsThrough: number
+  /** New links written over another link's row. */
+  overwrites: number
 }
 
 /** Collects completed requests that started between seconds `a` (inclusive) and `b` (exclusive). */
 export function gather(buckets: Bucket[], a: number, b: number): Window {
-  const w: Window = { reads: [], writes: [], readFails: 0, writeFails: 0, hits: 0, lookups: 0, readsLimited: 0, bots: 0, botsLimited: 0, botsThrough: 0 }
+  const w: Window = { reads: [], writes: [], readFails: 0, writeFails: 0, hits: 0, lookups: 0, readsLimited: 0, bots: 0, botsLimited: 0, botsThrough: 0, overwrites: 0 }
   for (let i = Math.max(0, a); i < b; i++) {
     const x = buckets[i]
     if (!x) continue
@@ -39,6 +41,7 @@ export function gather(buckets: Bucket[], a: number, b: number): Window {
     w.bots += x.b
     w.botsLimited += x.bl
     w.botsThrough += x.ba
+    w.overwrites += x.ow
   }
   return w
 }
@@ -129,6 +132,7 @@ export function simOptions(level: Level) {
     writesPerSec: level.writesPerSec,
     appMs: level.sim?.appMs,
     appLeaf: level.sim?.appLeaf,
+    rows: level.sim?.rows,
     bots: level.bots,
     limit: level.bots?.limit,
   }

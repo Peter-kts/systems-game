@@ -10,9 +10,14 @@
  * Levels with a rate limiter add bot traffic: a few API keys sending far more
  * than their limit. Gateways check each request against token buckets kept
  * either in a shared counter store or in each instance's own memory.
+ *
+ * Levels that store rows (the URL shortener) also track where each new link's
+ * short code came from, and count writes that land on a row someone else
+ * already owns. A small sample of row activity is reported for display.
  */
 import { CACHE_HIT } from '../game/catalog'
 import type { ComponentType, Design } from '../game/types'
+import { seeded } from './seeded'
 
 /** R: read (or a legitimate API call), W: write, B: a request from an abusive bot. */
 export type ReqType = 'R' | 'W' | 'B'
@@ -80,6 +85,10 @@ export interface RuntimeNode {
   backlog?: number
   workers?: string[]
   p?: Pool
+  /** Short codes an app server holds from the key generator. */
+  keys?: number
+  /** New links this database stored over another link's row. */
+  overwrites?: number
 }
 
 export interface Bucket {
@@ -95,7 +104,18 @@ export interface Bucket {
   b: number
   bl: number
   ba: number
+  /** New links written over a row that already belonged to another link. */
+  ow: number
 }
+
+/** How a new link gets its short code. */
+export type CodeSource = 'hash' | 'random' | 'counter' | 'kgs'
+
+/** One sampled thing that happened to a row, for the database view. */
+export type RowEvent =
+  | { db: string; kind: 'insert'; code: string; url: string; owner: string; via: CodeSource }
+  | { db: string; kind: 'overwrite'; code: string; url: string; owner: string; via: CodeSource; prev: { url: string; owner: string } }
+  | { db: string; kind: 'read' }
 
 export interface SimOptions {
   readsPerSec: number
@@ -108,9 +128,12 @@ export interface SimOptions {
   bots?: { keys: number; perKey: number }
   /** Rate limit per API key, requests/s. */
   limit?: number
+  /** Model short codes and rows (who owns which code). */
+  rows?: boolean
   random?: () => number
   onHop?: (from: string, to: string, type: ReqType) => void
   onDrop?: (id: string) => void
+  onRow?: (e: RowEvent) => void
 }
 
 export type ChaosKind = 'app' | 'db' | 'cache' | 'gateway' | 'counter'
@@ -129,6 +152,47 @@ const VIZ_PER_SEC = { R: 36, W: 5, B: 24 }
 const GATEWAY_MS = 1.5
 /** A dead counter store with no replica is replaced by a new, empty node after this long. */
 const COUNTER_RESTART_MS = 8000
+
+/** App server setting: how it makes short codes when no key generator answers. */
+export const CODES = { hash: 0, random: 1, counter: 2 } as const
+/** Codes an app server takes from the key generator at a time. */
+export const KEY_BATCH = 200
+/** Share of new links whose long URL someone has already shortened (a viral video, a news story). */
+const REPEAT_URL_SHARE = 0.05
+/** How far an async replica trails its primary. */
+const REPLICA_LAG_MS = 1000
+/** Sampled new rows reported for display, per second. */
+const ROWS_SHOWN_PER_SEC = 2
+
+const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const base62 = (n: number) => {
+  let s = ''
+  for (let i = 0; i < 7; i++) {
+    s = BASE62[n % 62] + s
+    n = Math.floor(n / 62)
+  }
+  return s
+}
+const hashCode = (url: string) => {
+  let h = 2166136261
+  for (const c of url) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0
+  return base62(h * 811 + url.length)
+}
+const POPULAR_URLS = [
+  'youtube.com/watch?v=dQw4w9WgXcQ',
+  'nytimes.com/2026/10/08/world/eclipse.html',
+  'github.com/trending',
+  'store.example.com/launch-day-sale',
+  'docs.google.com/forms/d/e/1FAIpQ/signup',
+]
+const SITES = ['blog.example.com/post', 'shop.example.org/item', 'news.example.net/story', 'example.edu/papers', 'maps.example.com/place']
+const PEOPLE = ['alice', 'bob', 'carol', 'dev', 'erin', 'farid', 'grace', 'hiro', 'ines', 'jamal', 'kim', 'lena']
+
+interface Row {
+  code: string
+  url: string
+  owner: string
+}
 
 type LimitState = { tokens: number; t: number; win: number; n: number; log: number[] }
 
@@ -202,6 +266,16 @@ export class Simulation {
   private rand: () => number
   private design: Design
   private opts: SimOptions
+  // Row bookkeeping, used when `rows` is on. Its own random stream keeps the queueing results unchanged.
+  private rowRand = seeded(97)
+  /** The database counter used for sequential codes. */
+  private seq = 3 * 62 ** 6
+  /** Counter codes handed out recently, oldest first, to know what a lagging replica will re-issue. */
+  private issued: { t: number; row: Row }[] = []
+  /** Codes a promoted replica will hand out again, with the link that already owns each. */
+  private reissue = new Map<string, Row>()
+  /** Who currently owns the hashed code of each popular URL. */
+  private popularOwner = new Map<string, string>()
 
   constructor(design: Design, opts: SimOptions) {
     this.design = design
@@ -244,7 +318,7 @@ export class Simulation {
 
   bucket(t = this.now): Bucket {
     const s = Math.floor(t / 1000)
-    return (this.buckets[s] ??= { r: [], w: [], rf: 0, wf: 0, hit: 0, look: 0, rl: 0, b: 0, bl: 0, ba: 0 })
+    return (this.buckets[s] ??= { r: [], w: [], rf: 0, wf: 0, hit: 0, look: 0, rl: 0, b: 0, bl: 0, ba: 0, ow: 0 })
   }
 
   hitRate(r: RuntimeNode) {
@@ -406,6 +480,55 @@ export class Simulation {
     return f
   }
 
+  // ---- rows ----
+
+  /** A new link was stored in `db` with a code from `via`: counts overwrites and reports a sample. */
+  private storeRow(db: string, via: CodeSource, req: Request) {
+    const rr = this.rowRand
+    const pick = <T,>(xs: T[]) => xs[Math.floor(rr() * xs.length)]
+    let row: Row
+    let prev: Row | undefined
+    if (via === 'hash' && rr() < REPEAT_URL_SHARE) {
+      // Same URL, same hash, same code: the row already belongs to whoever shortened it before.
+      const url = pick(POPULAR_URLS)
+      const code = hashCode(url)
+      const before = this.popularOwner.get(code) ?? PEOPLE[code.charCodeAt(0) % PEOPLE.length]
+      const owner = pick(PEOPLE.filter((p) => p !== before))
+      prev = { code, url, owner: before }
+      row = { code, url, owner }
+      this.popularOwner.set(code, owner)
+    } else {
+      const url = `${pick(SITES)}/${Math.floor(rr() * 1e6)}`
+      const code = via === 'hash' ? hashCode(url) : via === 'counter' ? base62(++this.seq) : base62(Math.floor(rr() * 62 ** 7))
+      row = { code, url, owner: pick(PEOPLE) }
+      if (via === 'counter') {
+        prev = this.reissue.get(code)
+        this.reissue.delete(code)
+        this.issued.push({ t: this.now, row })
+        if (this.issued.length > 2000) this.issued.splice(0, 1000)
+      }
+    }
+    if (prev) {
+      this.bucket(req.t0).ow++
+      const r = this.rt[db]
+      if (r) r.overwrites = (r.overwrites ?? 0) + 1
+      this.opts.onRow?.({ db, kind: 'overwrite', ...row, via, prev: { url: prev.url, owner: prev.owner } })
+    } else if (rr() < ROWS_SHOWN_PER_SEC / Math.max(1, this.rate('W'))) this.opts.onRow?.({ db, kind: 'insert', ...row, via })
+  }
+
+  /**
+   * The copy of the database that takes over trails the one that died, so the counter in it
+   * is behind: the codes handed out in that gap will be handed out again. Returns how many.
+   */
+  private rollbackCounter() {
+    const since = this.now - REPLICA_LAG_MS
+    const lost = this.issued.filter((x) => x.t > since)
+    this.seq -= lost.length
+    for (const x of lost) this.reissue.set(x.row.code, x.row)
+    this.issued = this.issued.filter((x) => x.t <= since)
+    return lost.length
+  }
+
   // ---- rate limiting ----
 
   /** Whether `key` may make another request within its limit, as counted in `scope`. */
@@ -533,13 +656,21 @@ export class Simulation {
           const db = first('sql') ?? first('nosql')
           const kgs = first('kgs')
           const queue = first('queue')
+          const codes = nd.cfg.codes ?? CODES.hash
+          r.keys = 0
           r.handle = (req, _op, done) => {
             if (req.type === 'R') {
               if (queue) {
                 const q = this.rt[queue]
                 if (q && !q.down) q.backlog = (q.backlog ?? 0) + 1
               }
-              const dbRead = () => (db ? this.visit(r.id, db, req, 'read', done) : done(!!cache))
+              const dbRead = () =>
+                db
+                  ? this.visit(r.id, db, req, 'read', (ok) => {
+                      if (ok && req.viz && this.opts.rows) this.opts.onRow?.({ db, kind: 'read' })
+                      done(ok)
+                    })
+                  : done(!!cache)
               if (cache) {
                 this.visit(r.id, cache, req, 'get', (ok) => {
                   const b = this.bucket()
@@ -555,19 +686,34 @@ export class Simulation {
             }
             // Writes retry for a few seconds so a database failover doesn't lose them.
             let tries = 0
-            const write = () => {
+            const write = (via: CodeSource) => {
               const fin = (ok: boolean) => {
+                if (ok && db && this.opts.rows) this.storeRow(db, via, req)
                 if (ok || ++tries >= 5 || !db) return done(ok)
-                this.at(1000, write)
+                this.at(1000, () => write(via))
               }
               if (db) this.visit(r.id, db, req, 'write', fin)
               else if (cache) this.visit(r.id, cache, req, 'set', fin)
               else done(false)
             }
-            // Without a key service, check the database for a collision first.
-            const checkThenWrite = () => (db ? this.visit(r.id, db, req, 'read', (ok) => (ok ? write() : done(false))) : write())
-            if (kgs) this.visit(r.id, kgs, req, 'key', (ok) => (ok ? write() : checkThenWrite()))
-            else checkThenWrite()
+            // Without a key service the app makes the code itself, which costs a database round trip
+            // first: a hash or random code is checked for a clash, a counter fetches its next number.
+            const own = () => {
+              const via: CodeSource = codes === CODES.counter ? 'counter' : codes === CODES.random ? 'random' : 'hash'
+              if (!db) return write(via)
+              this.visit(r.id, db, req, 'read', (ok) => (ok ? write(via) : done(false)))
+            }
+            if (!kgs) return own()
+            // Codes come from the key generator in batches and are kept in memory, so it is rarely called.
+            if (r.keys! > 0) {
+              r.keys!--
+              return write('kgs')
+            }
+            this.visit(r.id, kgs, req, 'key', (ok) => {
+              if (!ok) return own()
+              r.keys! += KEY_BATCH - 1
+              write('kgs')
+            })
           }
           break
         }
@@ -737,6 +883,10 @@ export class Simulation {
     if (kind === 'db') {
       const r = this.databaseInUse()
       if (!r) return 'There is no database to break.'
+      const counter = () => {
+        const behind = this.rollbackCounter()
+        return behind ? ` The copy that took over was ${behind} short codes behind, so the counter will hand those codes out again.` : ''
+      }
       if (r.type === 'nosql') {
         r.alive!--
         this.setServers(r.p!, r.alive! * 16)
@@ -748,7 +898,7 @@ export class Simulation {
           r.alive!++
           this.setServers(r.p!, r.alive! * 16)
         })
-        return `A NoSQL node died. The other ${r.alive} keep serving its keys from their copies; a replacement joins in 10 s.`
+        return `A NoSQL node died. The other ${r.alive} keep serving its keys from their copies; a replacement joins in 10 s.${counter()}`
       }
       const s = r.shards!.find((x) => x.primary)
       if (!s) return 'Every primary is already down.'
@@ -771,7 +921,7 @@ export class Simulation {
           this.setServers(s.read, (1 + s.rep) * 16)
         })
       })
-      return 'A database primary died. Replicas keep serving reads; writes fail until a replica is promoted (~3 s).'
+      return `A database primary died. Replicas keep serving reads; writes fail until a replica is promoted (~3 s).${counter()}`
     }
 
     const r = this.firstOf(['cache'])

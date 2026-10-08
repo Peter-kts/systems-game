@@ -67,7 +67,7 @@ export function gameSnapshot(): string {
   lines.push(
     '',
     `Design (cost $${totalCost(d)}/month of $${level.budget}):`,
-    ...d.nodes.map((n) => `- ${name(n.id)}: ${CATALOG[n.type].sub(n.cfg)} ($${CATALOG[n.type].cost(n.cfg)}/month)`),
+    ...d.nodes.map((n) => `- ${name(n.id)}: ${specFor(n.type, level).sub(n.cfg)} ($${CATALOG[n.type].cost(n.cfg)}/month)`),
     'Connections:',
     ...(d.edges.length ? d.edges.map((e) => `- ${name(e.from)} → ${name(e.to)}`) : ['- none']),
   )

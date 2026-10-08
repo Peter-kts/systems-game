@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { getLevel } from '../game/levels'
 import { totalCost } from '../game/review'
 import type { Design } from '../game/types'
-import { Simulation, type ChaosKind, type ReqType } from '../sim/engine'
+import { Simulation, type ChaosKind, type CodeSource, type ReqType, type RowEvent } from '../sim/engine'
 import { evaluationScript, gradePhase, secondStats, simOptions, type SecondStats } from '../sim/metrics'
 import { useGame } from './game'
 
@@ -20,6 +20,24 @@ export interface NodeStats {
   backlog?: number
   hitRate?: number
   workers?: number
+  /** Short codes an app server holds from the key generator. */
+  keys?: number
+  /** New links a database stored over another link's row, since the run started. */
+  overwrites?: number
+}
+
+/** One row in the database view. */
+export interface RowView {
+  code: string
+  url: string
+  owner: string
+  via: CodeSource
+  /** The link this row held before a new link landed on it. */
+  prev?: { url: string; owner: string }
+  reads: number
+  /** What last happened to the row, and when (performance.now), so its flash can replay. */
+  last: 'new' | 'read' | 'over'
+  at: number
 }
 
 export interface Particle {
@@ -44,6 +62,8 @@ interface SimState {
   series: SecondStats[]
   particles: Particle[]
   phaseResults: (boolean | null)[]
+  /** A live sample of rows per database node, newest first. */
+  rows: Record<string, RowView[]>
   tab: PanelTab
   setTab: (t: PanelTab) => void
 }
@@ -60,6 +80,7 @@ export const useSim = create<SimState>()((set) => ({
   series: [],
   particles: [],
   phaseResults: [],
+  rows: {},
   tab: 'learn',
   setTab: (tab) => set({ tab }),
 }))
@@ -74,6 +95,7 @@ let lastParticles = 0
 let nextSecond = 0
 let particleId = 0
 let pending: Particle[] = []
+let pendingRows: RowEvent[] = []
 const flashUntil = new Map<string, number>()
 const prevCounts = new Map<string, { arrivals: number; drops: number; at: number }>()
 
@@ -84,7 +106,54 @@ function create_(design: Design) {
       if (pending.length < 120) pending.push({ id: particleId++, edge: `${from}>${to}`, type, born: performance.now() })
     },
     onDrop: (id) => flashUntil.set(id, performance.now() + 300),
+    onRow: (e) => {
+      if (pendingRows.length < 200) pendingRows.push(e)
+    },
   })
+}
+
+const MAX_ROWS = 9
+/** Overwrites drawn per database per update; the counter still counts every one. */
+const OVERWRITES_SHOWN = 2
+
+/** Applies sampled row events to the database views. */
+function applyRows(cur: Record<string, RowView[]>, events: RowEvent[], now: number) {
+  const next = { ...cur }
+  const overs = new Map<string, number>()
+  for (const e of events) {
+    const rows = [...(next[e.db] ?? [])]
+    if (e.kind === 'read') {
+      if (!rows.length) continue
+      const i = Math.floor(Math.random() * rows.length)
+      const r = rows[i]
+      // Keep a fresh green or red flash visible; the click still counts.
+      const keep = r.last !== 'read' && now - r.at < 1500
+      rows[i] = { ...r, reads: r.reads + 1, ...(keep ? {} : { last: 'read' as const, at: now }) }
+    } else {
+      if (e.kind === 'overwrite') {
+        const n = overs.get(e.db) ?? 0
+        if (n >= OVERWRITES_SHOWN) continue
+        overs.set(e.db, n + 1)
+      }
+      const i = rows.findIndex((r) => r.code === e.code)
+      const row: RowView = {
+        code: e.code,
+        url: e.url,
+        owner: e.owner,
+        via: e.via,
+        prev: e.kind === 'overwrite' ? e.prev : undefined,
+        reads: 0,
+        last: e.kind === 'insert' ? 'new' : 'over',
+        at: now,
+      }
+      // An overwritten row that is on screen changes in place, so you see it replaced.
+      if (i >= 0) rows[i] = row
+      else rows.unshift(row)
+      rows.length = Math.min(rows.length, MAX_ROWS)
+    }
+    next[e.db] = rows
+  }
+  return next
 }
 
 function snapshotNodes() {
@@ -117,6 +186,8 @@ function snapshotNodes() {
       backlog: r.type === 'queue' ? r.backlog : undefined,
       hitRate: r.type === 'cache' ? sim.hitRate(r) : undefined,
       workers: r.type === 'queue' ? r.workers?.length : undefined,
+      keys: r.type === 'app' && r.out.kgs ? r.keys : undefined,
+      overwrites: r.type === 'sql' || r.type === 'nosql' ? (r.overwrites ?? 0) : undefined,
     }
   }
   return out
@@ -156,7 +227,9 @@ function frame(ts: number) {
   }
   if (ts - lastUi > 300 && sim) {
     lastUi = ts
-    useSim.setState({ nodes: snapshotNodes() ?? {}, simTime: sim.now, multiplier: sim.multiplier, attack: sim.attack })
+    const rows = pendingRows.length ? applyRows(st.rows, pendingRows, ts) : st.rows
+    pendingRows = []
+    useSim.setState({ nodes: snapshotNodes() ?? {}, simTime: sim.now, multiplier: sim.multiplier, attack: sim.attack, rows })
     collectSeries()
   }
 }
@@ -168,10 +241,11 @@ function ensureLoop() {
 function fresh() {
   sim = create_(useGame.getState().design)
   pending = []
+  pendingRows = []
   nextSecond = 0
   prevCounts.clear()
   flashUntil.clear()
-  useSim.setState({ series: [], particles: [], nodes: {}, simTime: 0, flashing: {} })
+  useSim.setState({ series: [], particles: [], nodes: {}, simTime: 0, flashing: {}, rows: {} })
 }
 
 export const simControls = {

@@ -423,3 +423,17 @@ h3 {
     animation: none !important;
   }
 }
+
+/* A row in the database view lighting up when something happens to it */
+.db-flash {
+  opacity: 0;
+  animation: db-flash 1.4s ease-out;
+}
+@keyframes db-flash {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0;
+  }
+}
