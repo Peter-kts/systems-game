@@ -1,7 +1,7 @@
-import { CACHE_HIT } from '../catalog'
+import { CACHE_HIT, CODE_NAMES, plural } from '../catalog'
 import { reviewKit } from '../review'
 import type { Design } from '../types'
-import { readChecks, writeChecks } from './checks'
+import { overwriteCheck, readChecks, writeChecks } from './checks'
 import type { Estimate, Level, Requirement } from './types'
 
 const STORAGE_TB = 3
@@ -34,7 +34,7 @@ const ESTIMATES: Estimate[] = [
 const starter = (): Design => ({
   nodes: [
     { id: 'client', type: 'client', x: 20, y: 280, cfg: {} },
-    { id: 'n1', type: 'app', x: 460, y: 280, cfg: { inst: 1 } },
+    { id: 'n1', type: 'app', x: 460, y: 280, cfg: { inst: 1, codes: 0 } },
     { id: 'n2', type: 'sql', x: 920, y: 280, cfg: { shards: 1, rep: 0 } },
   ],
   edges: [
@@ -47,7 +47,7 @@ const reference = (): Design => ({
   nodes: [
     { id: 'client', type: 'client', x: 20, y: 280, cfg: {} },
     { id: 'r1', type: 'lb', x: 240, y: 280, cfg: {} },
-    { id: 'r2', type: 'app', x: 460, y: 280, cfg: { inst: 6 } },
+    { id: 'r2', type: 'app', x: 460, y: 280, cfg: { inst: 6, codes: 1 } },
     { id: 'r3', type: 'cache', x: 690, y: 150, cfg: { size: 128, rep: 1 } },
     { id: 'r4', type: 'kgs', x: 690, y: 420, cfg: { inst: 2 } },
     { id: 'r5', type: 'nosql', x: 920, y: 280, cfg: { n: 5 } },
@@ -62,7 +62,7 @@ const reference = (): Design => ({
 })
 
 const TALKING_POINTS: [string, string][] = [
-  ['Generating short codes', 'Three options. Hash the long URL (MD5 → base62, take 7 chars) and check for collisions. Use a global counter encoded in base62 (no collisions, but guessable unless scrambled). Or a key service that pre-generates random codes. Say why you picked one.'],
+  ['Generating short codes', 'Four options. Hash the long URL (MD5 → base62, take 7 chars): repeat URLs get the same code, so you must dedupe or salt. Random codes: check the database for a clash first, or insert with a uniqueness condition. A global counter in base62: no clashes, but guessable unless scrambled, and an async replica can re-issue codes after failover. Or a key service that hands out batches of pre-made random codes, so writes need no check. Say why you picked one.'],
   ['301 or 302?', '301 (permanent) lets browsers and CDNs cache the redirect: less load, but you lose click counts. 302 (temporary) sends every click to you: more load, full analytics.'],
   ['Data model', 'One table: code (primary key), long_url, created_at, expires_at, user_id. Every lookup is by code, which makes it a key-value workload. NoSQL or sharded SQL both work.'],
   ['Sharding', 'Shard by a hash of the short code so data and traffic spread evenly. Range-based sharding creates hot spots for recent links.'],
@@ -126,11 +126,18 @@ function review(d: Design, scope: Record<string, string>) {
   }
 
   const kgs = appKids('kgs')
-  if (apps.length && !kgs.length)
-    add('info', 'No key generator', 'Each new link hashes the URL and checks the database for a collision first: one extra read per write. Fine at 40 writes/s, but be ready to discuss it.')
-  else if (kgs.some((k) => k.cfg.inst === 1))
-    add('warn', 'One key generator is a single point of failure', "App servers fall back to hashing if it dies, but say how you'd run two that never hand out the same code.")
-  else if (kgs.length) add('pass', 'Short codes come from a key service', "No collision checks on write, and codes can be random so they aren't guessable.")
+  // The riskiest short-code setting among the app servers decides.
+  const codes = apps.some((a) => (a.cfg.codes ?? 0) === 0) ? 'hash' : apps.some((a) => a.cfg.codes === 2) ? 'counter' : 'random'
+  if (apps.length && !kgs.length) {
+    if (codes === 'hash')
+      add('fail', "Repeat URLs overwrite each other's links", 'About 1 in 20 new links is a URL someone already shortened. Its hash gives the same code, so it lands on their row and takes it over. Add a key generator, or switch the app server to random codes.')
+    else if (codes === 'counter')
+      add(scope.guess === 'must' ? 'fail' : 'warn', 'Counter codes are guessable and repeat after a failover', 'Anyone can walk …0001, …0002 to list every link. And if the database fails over to a replica that is behind, the counter hands out recent codes again, on top of existing links. Add a key generator, or use random codes.')
+    else
+      add('info', 'Random codes with a database check', 'This works: clashes are very rare among 3.5 trillion codes. It costs one extra database read per new link, which a key generator removes.')
+  } else if (kgs.some((k) => k.cfg.inst === 1))
+    add('warn', 'One key generator is a single point of failure', "If it dies, app servers use up their batch of codes and then fall back to their own Short codes setting. Run two, each owning its own range of codes.")
+  else if (kgs.length) add('pass', 'Short codes come from a key service', "Random, never repeated, and no database check on write: app servers take them in batches.")
 
   if (ofType('cdn').length) {
     if (analytics !== 'out')
@@ -169,6 +176,7 @@ export const urlShortener: Level = {
   estimateHint: 'Handy: one month ≈ 2.6 million seconds. 62 characters (a–z, A–Z, 0–9) per code position.',
   readsPerSec: 4000,
   writesPerSec: 40,
+  sim: { rows: true },
   words: { read: 'click', reads: 'Clicks', write: 'new link', writes: 'New links' },
   targets: { readAvailability: 0.999, readP99Ms: 100 },
   palette: ['cdn', 'lb', 'app', 'cache', 'sql', 'nosql', 'kgs', 'queue', 'worker'],
@@ -182,13 +190,14 @@ export const urlShortener: Level = {
     cdn: { here: 'Optional. It removes a lot of load from your servers, but it conflicts with click tracking.' },
     lb: { here: 'Put it between Users (or the CDN) and your app servers. This one sends each request to the least busy app server.' },
     app: {
+      sub: (c) => `${plural(c.inst, 'instance')} · ${CODE_NAMES[c.codes ?? 0].toLowerCase()} codes`,
       what: 'Runs your code: validates input, gets a short code, talks to the cache and database, and returns the redirect. Each instance has 16 worker threads, and a thread stays busy while it waits on the cache or database.',
-      here: 'Size for the 5× spike, not the average. Connect it to a cache, a database and, optionally, a key generator.',
+      here: 'Size for the 5× spike, not the average. Connect it to a cache and a database. Its Short codes setting decides how new links get their code; a key generator replaces it.',
     },
     cache: { here: "Your hot-data estimate (~120 GB) tells you the size. A replica means a node failure doesn't wipe the cache." },
     sql: { here: "3 TB of links won't fit on one machine. Shard by short code and give each shard a replica." },
     nosql: { here: 'Scales by adding nodes, and a dead node is handled with no failover pause.' },
-    kgs: { here: 'Optional, but a classic talking point: hashing vs. counters vs. a key service.' },
+    kgs: { here: "Connect it from the app server and the app's own Short codes setting only applies if it can't answer. Watch the arrow into it: only a trickle of batch requests, not one per new link." },
     queue: { here: 'For click analytics: each redirect publishes a click event without slowing the redirect down. Pair it with workers.' },
     worker: { here: 'Only useful if click analytics are in scope.' },
   },
@@ -208,8 +217,8 @@ export const urlShortener: Level = {
     { t: 42, kind: 'chaos', target: 'cache' },
   ],
   end: 60,
-  checks: [...readChecks('Clicks', 0.999, 100), ...writeChecks('New links', 0.99, 1000)],
-  evalSummary: 'A graded 60-second test: normal day, 5× spike, a database failure and a cache failure.',
+  checks: [...readChecks('Clicks', 0.999, 100), ...writeChecks('New links', 0.99, 1000), overwriteCheck],
+  evalSummary: 'A graded 60-second test: normal day, 5× spike, a database failure and a cache failure. No new link may overwrite an existing one.',
   breakable: [
     { kind: 'app', label: 'App server', tip: 'Kill one app server instance.' },
     { kind: 'db', label: 'Database', tip: 'Kill a database machine: a SQL primary or a NoSQL node.' },
@@ -232,6 +241,9 @@ export const urlShortener: Level = {
       out.push(['A database failure breaks it', 'Without replicas a dead machine takes its links with it. SQL replicas keep serving reads during failover; NoSQL keeps copies on other nodes.'])
     if (cache && !cache.pass)
       out.push(['Losing the cache breaks it', 'When the cache dies, all reads hit the database at once (a thundering herd). Add a cache replica, or give the database enough headroom.'])
+    const ow = urlShortener.checks.findIndex((c) => c.id === 'overwrites')
+    if (phases.some((p) => p.values[ow] > 0))
+      out.push(['New links overwrote existing ones', 'Click a database while it runs to watch rows turn red. Hashed codes clash whenever someone shortens a URL that was already shortened; counter codes repeat after a failover. A key generator, or random codes, avoids both.'])
     return out
   },
 }

@@ -33,7 +33,7 @@ export function specFor(type: ComponentType, level: Level): ComponentSpec & { he
   const note = level.notes[type]
   if (!note) return base
   const { sub, ...text } = note
-  return { ...base, ...text, sub: sub ? () => sub : base.sub }
+  return { ...base, ...text, sub: typeof sub === 'function' ? sub : sub ? () => sub : base.sub }
 }
 
 export const columnFor = (type: ComponentType, level: Level) => level.columns?.[type] ?? COLUMN_X[type]

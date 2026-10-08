@@ -1,6 +1,11 @@
 import type { ComponentType, Config } from './types'
 
-export interface NumberField {
+interface FieldBase {
+  /** Levels that show this setting; every level when absent. */
+  levels?: string[]
+}
+
+export interface NumberField extends FieldBase {
   kind: 'number'
   key: string
   label: string
@@ -9,7 +14,7 @@ export interface NumberField {
   def: number
 }
 
-export interface ChoiceField {
+export interface ChoiceField extends FieldBase {
   kind: 'choice'
   key: string
   label: string
@@ -17,6 +22,8 @@ export interface ChoiceField {
   unit: string
   /** Names to show instead of `${option} ${unit}`, for settings that pick a behaviour. */
   labels?: string[]
+  /** What each option does, shown under the setting. */
+  help?: string[]
   def: number
 }
 
@@ -40,7 +47,7 @@ export interface ComponentSpec {
 /** Text a level can override for one component: how it behaves and matters in that problem. */
 export interface ComponentNote {
   /** Shown under the name on the board instead of the usual summary. */
-  sub?: string
+  sub?: string | ((c: Config) => string)
   what?: string
   nums?: string
   /** "In this problem": advice specific to the level. */
@@ -50,9 +57,15 @@ export interface ComponentNote {
 export const CACHE_HIT: Record<number, number> = { 32: 0.75, 64: 0.85, 128: 0.92, 256: 0.95 }
 export const CACHE_COST: Record<number, number> = { 32: 100, 64: 180, 128: 330, 256: 600 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const ALGO_NAMES = ['Token bucket', 'Fixed window', 'Sliding log']
 const FAIL_NAMES = ['Allow all', 'Reject all', 'Count locally']
+export const CODE_NAMES = ['Hash URL', 'Random', 'Counter']
+const CODE_HELP = [
+  'Code = 7 characters of a hash of the long URL, checked against the database first. The same URL always hashes to the same code, so a second person shortening a popular URL lands on the first person\'s row and takes it over.',
+  '7 random characters, checked against the database first. With 3.5 trillion possible codes a clash is very rare, so this works. The price is one extra database read for every new link.',
+  'A counter in the database: link 1, 2, 3… written in base62. No clashes while the database is healthy, but anyone can guess the next code, and if it fails over to a replica that is behind, the counter hands out recent codes again.',
+]
 
 export const CATALOG: Record<ComponentType, ComponentSpec> = {
   client: {
@@ -95,7 +108,10 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
   app: {
     name: 'App server',
     tag: 'Runs your code',
-    fields: [{ kind: 'number', key: 'inst', label: 'Instances', min: 1, max: 12, def: 2 }],
+    fields: [
+      { kind: 'number', key: 'inst', label: 'Instances', min: 1, max: 12, def: 2 },
+      { kind: 'choice', key: 'codes', label: 'Short codes', options: [0, 1, 2], labels: CODE_NAMES, help: CODE_HELP, unit: '', def: 0, levels: ['url-shortener'] },
+    ],
     cost: (c) => 60 * c.inst,
     count: (c) => c.inst,
     sub: (c) => plural(c.inst, 'instance'),
@@ -153,10 +169,10 @@ export const CATALOG: Record<ComponentType, ComponentSpec> = {
     cost: (c) => 40 * c.inst,
     count: (c) => c.inst,
     sub: (c) => plural(c.inst, 'instance'),
-    what: 'A small service that generates unique short codes ahead of time and hands them out. The app asks for a code instead of computing one.',
+    what: 'A small service that makes unique random short codes ahead of time and hands them out. Each app server takes a batch of 200 and keeps them in memory, so it only calls the key generator now and then, not on every new link.',
     when: 'Whenever you need unique IDs at scale without coordination: short codes, order numbers, Snowflake-style IDs.',
-    watch: 'Without it, the app hashes the URL (or picks random characters) and must check the database for a collision before every write: one extra read per write. Two instances must never hand out the same code, so each reserves its own batch.',
-    nums: '~0.5 ms per code. $40/month per instance.',
+    watch: "Without it, the app makes codes itself, and each way has a catch: hashing the URL gives repeat URLs the same row, random codes need a database check on every write, and a counter is guessable and can repeat codes after a failover. Two instances must never hand out the same code, so each owns its own range. Codes left in a batch when an app server dies are simply never used.",
+    nums: '~0.5 ms per batch. $40/month per instance.',
   },
   queue: {
     name: 'Message queue',

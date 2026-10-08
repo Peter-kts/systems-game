@@ -10,6 +10,7 @@ import { visualFor } from '../../game/visuals'
 import { cn, fmt } from '../../lib/utils'
 import { nodeName, useGame, useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
+import { DataPanel } from './DataPanel'
 
 const REDUCED = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -86,6 +87,7 @@ function LiveStats({ id }: { id: string }) {
       ? [tile('Backlog', fmt(s.backlog)), tile('Workers', String(s.workers ?? 0))]
       : [tile('Requests/s', fmt(s.rate)), tile('Busy', `${Math.round(s.util * 100)}%`), tile('Dropped/s', fmt(s.dropRate))]
   if (s.hitRate !== undefined) tiles.push(tile('Hit rate now', `${Math.round(s.hitRate * 100)}%`))
+  if (s.keys !== undefined) tiles.push(tile('Codes in batch', fmt(s.keys)))
   if (s.state === 'down') tiles.push(tile('State', 'DOWN'))
   return (
     <div>
@@ -97,6 +99,9 @@ function LiveStats({ id }: { id: string }) {
 
 function Inspector({ node }: { node: DesignNode }) {
   const spec = CATALOG[node.type]
+  const level = useLevel()
+  const keyGen = useGame((s) => s.design.edges.some((e) => e.from === node.id && s.design.nodes.find((n) => n.id === e.to)?.type === 'kgs'))
+  const fields = spec.fields.filter((f) => !f.levels || f.levels.includes(level.id))
   const { setConfig, removeNode } = useGame.getState()
   return (
     <div className="grid gap-3.5">
@@ -111,7 +116,7 @@ function Inspector({ node }: { node: DesignNode }) {
       </div>
       {!spec.fixed && (
         <div className="grid gap-2 rounded-xl bg-bg px-3 py-2.5">
-          {spec.fields.map((f) =>
+          {fields.map((f) =>
             f.kind === 'choice' ? (
               <div key={f.key} className={cn('flex justify-between gap-x-2.5 gap-y-1.5', f.labels ? 'flex-col' : 'items-center')}>
                 <span className="text-[13px]">{f.label}</span>
@@ -120,14 +125,18 @@ function Inspector({ node }: { node: DesignNode }) {
                     <button
                       key={o}
                       role="radio"
-                      aria-checked={node.cfg[f.key] === o}
+                      aria-checked={(node.cfg[f.key] ?? f.def) === o}
                       onClick={() => setConfig(node.id, f.key, o)}
-                      className={cn('cursor-pointer px-2 py-1 font-mono text-xs [&+&]:border-l [&+&]:border-line2', node.cfg[f.key] === o ? 'bg-accent/15 text-accent [text-shadow:0_0_8px_var(--accent)]' : 'text-muted')}
+                      className={cn('cursor-pointer px-2 py-1 font-mono text-xs [&+&]:border-l [&+&]:border-line2', (node.cfg[f.key] ?? f.def) === o ? 'bg-accent/15 text-accent [text-shadow:0_0_8px_var(--accent)]' : 'text-muted')}
                     >
                       {f.labels?.[i] ?? `${o} ${f.unit}`}
                     </button>
                   ))}
                 </div>
+                {f.help && <p className="m-0 text-[12px] text-muted">{f.help[f.options.indexOf(node.cfg[f.key] ?? f.def)]}</p>}
+                {f.key === 'codes' && keyGen && (
+                  <p className="m-0 text-[12px] text-accent">A key generator is connected, so codes come from it. This setting only applies if it can't answer.</p>
+                )}
               </div>
             ) : (
               <div key={f.key} className="flex items-center justify-between gap-2.5">
@@ -143,6 +152,7 @@ function Inspector({ node }: { node: DesignNode }) {
         </div>
       )}
       <LiveStats id={node.id} />
+      {level.sim?.rows && (node.type === 'sql' || node.type === 'nosql') && <DataPanel id={node.id} />}
       <LearnCard type={node.type} />
     </div>
   )

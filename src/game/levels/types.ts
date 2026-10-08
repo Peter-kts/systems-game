@@ -78,7 +78,7 @@ export interface Level {
   /** Bot traffic switched on by the "attack" events, and the per-key limit it should be held to. */
   bots?: { keys: number; perKey: number; limit: number }
   /** Simulation details that differ per level. */
-  sim?: { appMs?: number; appLeaf?: boolean }
+  sim?: { appMs?: number; appLeaf?: boolean; rows?: boolean }
   /** How requests are called in this problem. */
   words: { read: string; reads: string; write?: string; writes?: string }
   /** Success and p99 latency targets for reads, used for the live numbers. */

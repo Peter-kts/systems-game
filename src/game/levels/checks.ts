@@ -1,5 +1,5 @@
 import { botRatio, percentile, readAvailability, writeAvailability } from '../../sim/metrics'
-import { ms, pct } from '../../lib/utils'
+import { fmt, ms, pct } from '../../lib/utils'
 import type { Check } from './types'
 
 /** Read success and p99 latency, the checks every level grades. */
@@ -54,4 +54,14 @@ export const botCheck: Check = {
   pass: (v, phase) => v <= (phase.botTolerance ?? 1.25),
   format: (v) => (Number.isNaN(v) ? '–' : `${v < 10 ? v.toFixed(2) : Math.round(v)}×`),
   note: (phase) => (phase.botTolerance ? `≤ ${phase.botTolerance}× here` : undefined),
+}
+
+/** No new link may land on a row another link already owns. */
+export const overwriteCheck: Check = {
+  id: 'overwrites',
+  label: 'Links overwritten',
+  target: '0',
+  measure: (w) => w.overwrites,
+  pass: (v) => v === 0,
+  format: fmt,
 }
