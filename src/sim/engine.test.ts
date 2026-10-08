@@ -87,3 +87,14 @@ describe('URL shortener: short codes', () => {
     expect(kgs.arrivals).toBeLessThan((20 * level.writesPerSec) / 50)
   })
 })
+
+describe('URL shortener: advice', () => {
+  it('blames overwrites, not failover, when only links were overwritten', () => {
+    const d = level.reference()
+    const kgs = d.nodes.find((n) => n.type === 'kgs')!.id
+    d.nodes = d.nodes.filter((n) => n.id !== kgs).map((n) => (n.type === 'app' ? { ...n, cfg: { ...n.cfg, codes: 2 } } : n))
+    d.edges = d.edges.filter((e) => e.to !== kgs)
+    const titles = level.advice(runEvaluation(level, d, seeded(7)).phases).map(([t]) => t)
+    expect(titles).toEqual(['New links overwrote existing ones'])
+  })
+})

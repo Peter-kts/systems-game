@@ -1,5 +1,6 @@
 import { CACHE_HIT, CODE_NAMES, plural } from '../catalog'
 import { reviewKit } from '../review'
+import type { PhaseResult } from '../../sim/metrics'
 import type { Design } from '../types'
 import { overwriteCheck, readChecks, writeChecks } from './checks'
 import type { Estimate, Level, Requirement } from './types'
@@ -232,16 +233,18 @@ export const urlShortener: Level = {
   review,
   advice: (phases) => {
     const out: [string, string][] = []
-    const [normal, spike, db, cache] = phases
-    if (normal && !normal.pass)
-      out.push(['It fails on a normal day', 'Check the Review tab first: something on the main path is missing, overloaded, or a single machine.'])
-    if (spike && !spike.pass && normal?.pass)
-      out.push(['The 5× spike overwhelms it', "Look at which component turned red during the spike. Usually: too few app instances (each does ~3,500 req/s), or reads reaching the database because there's no cache."])
-    if (db && !db.pass)
-      out.push(['A database failure breaks it', 'Without replicas a dead machine takes its links with it. SQL replicas keep serving reads during failover; NoSQL keeps copies on other nodes.'])
-    if (cache && !cache.pass)
-      out.push(['Losing the cache breaks it', 'When the cache dies, all reads hit the database at once (a thundering herd). Add a cache replica, or give the database enough headroom.'])
     const ow = urlShortener.checks.findIndex((c) => c.id === 'overwrites')
+    // Overwrites get their own advice, so they don't count as the load or failover problems below.
+    const broke = (p?: PhaseResult) => !!p && p.checks.some((ok, i) => ok === false && i !== ow)
+    const [normal, spike, db, cache] = phases
+    if (broke(normal))
+      out.push(['It fails on a normal day', 'Check the Review tab first: something on the main path is missing, overloaded, or a single machine.'])
+    if (broke(spike) && !broke(normal))
+      out.push(['The 5× spike overwhelms it', "Look at which component turned red during the spike. Usually: too few app instances (each does ~3,500 req/s), or reads reaching the database because there's no cache."])
+    if (broke(db))
+      out.push(['A database failure breaks it', 'Without replicas a dead machine takes its links with it. SQL replicas keep serving reads during failover; NoSQL keeps copies on other nodes.'])
+    if (broke(cache))
+      out.push(['Losing the cache breaks it', 'When the cache dies, all reads hit the database at once (a thundering herd). Add a cache replica, or give the database enough headroom.'])
     if (phases.some((p) => p.values[ow] > 0))
       out.push(['New links overwrote existing ones', 'Click a database while it runs to watch rows turn red. Hashed codes clash whenever someone shortens a URL that was already shortened; counter codes repeat after a failover. A key generator, or random codes, avoids both.'])
     return out
