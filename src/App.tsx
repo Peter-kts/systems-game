@@ -46,7 +46,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="grid h-full min-h-0 grid-rows-[auto_1fr] max-lg:h-auto max-lg:min-h-full">
-        <header className="relative z-20 flex flex-wrap items-center gap-5 border-b border-line bg-glass px-4 py-2.5 backdrop-blur-md">
+        <header className="relative z-20 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-glass px-4 py-2.5 backdrop-blur-md">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="grid size-8 place-items-center rounded-lg border border-accent/50 bg-accent/10 text-accent shadow-glow">
               <Cpu size={18} aria-hidden />
@@ -87,7 +87,7 @@ export default function App() {
                 >
                   {i + 1}
                 </b>
-                <span className="max-sm:hidden">{s.label}</span>
+                <span className={cn(step !== s.id && 'max-sm:hidden')}>{s.label}</span>
               </button>
             ))}
           </nav>}

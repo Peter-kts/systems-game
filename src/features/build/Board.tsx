@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
 import { toast } from 'sonner'
 import type { ComponentType } from '../../game/types'
+import { COARSE, NARROW, useMedia } from '../../lib/useMedia'
 import { useGame } from '../../store/game'
 import { useSim } from '../../store/sim'
 import { ComponentNode } from './ComponentNode'
@@ -30,13 +31,17 @@ export function Board() {
   const running = useSim((s) => s.running)
   const { moveNode, removeNode, addEdge, removeEdge, select, addNode } = useGame.getState()
   const { screenToFlowPosition, fitView } = useReactFlow()
+  const narrow = useMedia(NARROW)
+  const touch = useMedia(COARSE)
+  // On a phone, fitting a whole design would shrink the cards past reading; keep them legible and let the player pan.
+  const fit = useMemo(() => ({ padding: 0.15, minZoom: narrow ? 0.5 : 0.3 }), [narrow])
 
   // Re-frame the board when a different design is loaded (e.g. the reference design).
   const loadedKey = design.nodes.some((n) => n.id === 'r1') ? 'reference' : 'mine'
   useEffect(() => {
-    const t = setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 50)
+    const t = setTimeout(() => fitView({ ...fit, duration: 300 }), 50)
     return () => clearTimeout(t)
-  }, [loadedKey, fitView])
+  }, [loadedKey, fit, fitView])
 
   // React Flow reports each node's measured size; keep it so derived nodes stay visible.
   const [measured, setMeasured] = useState<Record<string, Node['measured']>>({})
@@ -135,7 +140,8 @@ export function Board() {
       }}
       onDrop={onDrop}
       fitView
-      fitViewOptions={{ padding: 0.15 }}
+      fitViewOptions={fit}
+      connectionRadius={touch ? 48 : 20}
       minZoom={0.3}
       maxZoom={1.75}
       snapToGrid

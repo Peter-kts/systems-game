@@ -62,7 +62,7 @@ export function SidePanel() {
   const setTab = useSim((s) => s.setTab)
   const fails = useReview().filter((r) => r.lvl === 'fail').length
   return (
-    <aside className="grid min-h-0 grid-rows-[auto_1fr] border-l border-line bg-glass backdrop-blur-md max-lg:border-l-0 max-lg:border-t">
+    <aside id="side-panel" className="grid min-h-0 scroll-mt-2 grid-rows-[auto_1fr] border-l border-line bg-glass backdrop-blur-md max-lg:border-l-0 max-lg:border-t">
       <Tabs value={tab} onValueChange={(v) => setTab(v as PanelTab)} className="contents">
         <TabsList>
           <TabsTrigger value="learn">Learn</TabsTrigger>

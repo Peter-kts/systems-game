@@ -437,3 +437,24 @@ h3 {
     opacity: 0;
   }
 }
+
+/* ---- Touch screens ---- */
+@media (pointer: coarse) {
+  /* Bigger connection dots, with an invisible halo that is easy to hit with a finger. */
+  .react-flow__handle {
+    width: 18px;
+    height: 18px;
+  }
+  .react-flow__handle::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    border-radius: 50%;
+  }
+  /* iOS zooms the page into any text field smaller than 16px. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
