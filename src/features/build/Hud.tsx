@@ -11,15 +11,15 @@ function Tile({ label, value, tone, tip }: { label: string; value: ReactNode; to
       <div
         tabIndex={0}
         className={cn(
-          'pointer-events-auto min-w-26 rounded-xl border border-line bg-glass px-3 py-1.5 backdrop-blur-md',
+          'pointer-events-auto min-w-26 rounded-xl border border-line bg-glass px-3 py-1.5 backdrop-blur-md max-sm:min-w-0 max-sm:px-2 max-sm:py-1',
           tone === 'good' && 'border-ok/40 shadow-[0_0_16px_-8px_var(--ok)]',
           tone === 'bad' && 'border-bad/50 shadow-[0_0_16px_-6px_var(--bad)]',
         )}
       >
-        <span className="block whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-muted">{label}</span>
+        <span className="block whitespace-nowrap font-mono text-[10px] max-sm:text-[9px] uppercase tracking-wider text-muted">{label}</span>
         <strong
           className={cn(
-            'font-mono text-[17px] font-semibold tabular-nums',
+            'font-mono text-[17px] font-semibold tabular-nums max-sm:text-[14px]',
             tone === 'good' && 'text-ok [text-shadow:0_0_10px_var(--ok)]',
             tone === 'bad' && 'text-bad [text-shadow:0_0_10px_var(--bad)]',
           )}

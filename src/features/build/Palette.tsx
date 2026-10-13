@@ -1,7 +1,9 @@
+import { useReactFlow } from '@xyflow/react'
 import type { CSSProperties } from 'react'
 import { ComponentIcon } from '../../components/ComponentIcon'
 import { HUE } from '../../components/hues'
 import { CATALOG } from '../../game/catalog'
+import { NARROW, useMedia } from '../../lib/useMedia'
 import { useGame, useLevel } from '../../store/game'
 import { useSim } from '../../store/sim'
 import { DND_TYPE } from './Board'
@@ -9,6 +11,8 @@ import { DND_TYPE } from './Board'
 export function Palette() {
   const addNode = useGame((s) => s.addNode)
   const level = useLevel()
+  const narrow = useMedia(NARROW)
+  const { getZoom, setCenter } = useReactFlow()
   return (
     <aside aria-label="Components" className="flex min-h-0 flex-col gap-1.5 overflow-auto border-r border-line bg-glass p-3 backdrop-blur-md max-lg:flex-row max-lg:border-b max-lg:border-r-0 max-lg:px-4">
       <h3 className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted max-lg:hidden">Components</h3>
@@ -21,8 +25,11 @@ export function Palette() {
             e.dataTransfer.effectAllowed = 'copy'
           }}
           onClick={() => {
-            addNode(t)
+            const id = addNode(t)
             useSim.getState().setTab('learn')
+            // A phone shows only part of the board, so bring the new component into view.
+            const n = narrow && useGame.getState().design.nodes.find((x) => x.id === id)
+            if (n) setCenter(n.x + 98, n.y + 40, { zoom: getZoom(), duration: 300 })
           }}
           style={{ '--hue': HUE[t] } as CSSProperties}
           className="group flex shrink-0 cursor-grab items-center gap-2.5 rounded-xl border border-line bg-node px-2 py-1.5 text-left transition-[border-color,box-shadow] hover:border-[var(--hue)] hover:shadow-[0_0_16px_-6px_var(--hue)] active:cursor-grabbing"

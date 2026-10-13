@@ -12,7 +12,7 @@ export function SimBar() {
   const showTimeline = evalMode || phaseResults.some((r) => r !== null)
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-glass px-3 py-2 backdrop-blur-md">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 max-sm:order-1">
         {running ? (
           <Button size="sm" variant="primary" onClick={simControls.pause}>
             <Pause /> Pause
@@ -23,27 +23,27 @@ export function SimBar() {
           </Button>
         )}
         <Button size="sm" onClick={simControls.reset}>
-          <RotateCcw /> Reset
+          <RotateCcw /> <span className="max-sm:sr-only">Reset</span>
         </Button>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-sm:order-4 max-sm:w-full">
         <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Traffic</span>
         <Slider min={1} max={6} step={1} value={[multiplier]} onValueChange={([v]) => simControls.setMultiplier(v)} disabled={evalMode} />
         <span className="w-32 font-mono text-xs tabular-nums text-accent">{fmt(level.readsPerSec * multiplier)} {level.words.reads.toLowerCase()}/s</span>
       </div>
       {level.bots && (
         <Tip content={`Turn the bots on or off: ${level.bots.keys} API keys sending ${fmt(level.bots.perKey)} requests/s each, against a limit of ${level.bots.limit}/s.`}>
-          <Button size="sm" variant={attack ? 'danger' : undefined} onClick={simControls.toggleAttack} disabled={evalMode} aria-pressed={attack}>
+          <Button size="sm" variant={attack ? 'danger' : undefined} className="max-sm:order-5" onClick={simControls.toggleAttack} disabled={evalMode} aria-pressed={attack}>
             <Bot /> {attack ? 'Stop attack' : 'Start attack'}
           </Button>
         </Tip>
       )}
       <Tip content="Run the simulation faster than real time.">
-        <Button size="sm" variant="ghost" onClick={simControls.toggleSpeed}>
+        <Button size="sm" variant="ghost" onClick={simControls.toggleSpeed} className="max-sm:order-2">
           <Gauge /> {speed}×
         </Button>
       </Tip>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 max-sm:order-5">
         <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Break</span>
         {level.breakable.map((b) => (
           <Tip key={b.kind} content={b.tip}>
@@ -51,14 +51,14 @@ export function SimBar() {
           </Tip>
         ))}
       </div>
-      <div className="flex-1" />
+      <div className="flex-1 max-sm:hidden" />
       <Tip content={level.evalSummary}>
-        <Button size="sm" variant="primary" onClick={simControls.evaluate} disabled={evalMode}>
+        <Button size="sm" variant="primary" onClick={simControls.evaluate} disabled={evalMode} className="max-sm:order-3 max-sm:ml-auto">
           <Flame /> Run evaluation
         </Button>
       </Tip>
       {showTimeline && (
-        <div className="relative flex h-6 basis-full gap-0.5 overflow-hidden text-[11px]">
+        <div className="relative flex h-6 basis-full gap-0.5 max-sm:order-6 overflow-hidden text-[11px]">
           {level.phases.map((p, i) => (
             <div
               key={p.name}
